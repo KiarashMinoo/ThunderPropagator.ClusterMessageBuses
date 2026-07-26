@@ -36,11 +36,13 @@
     <RepositoryUrl>https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup Label="PackageAssets">
-    <!-- Every project in this repo gets the core ThunderPropagator package so IClusterMessageBus
-         (defined in ThunderPropagator.Application, see core issue #340) is available once that
-         ticket ships and this pin is bumped. Until then this just resolves today's published
-         Application/Infrastructure contracts (e.g. IFeature) that AddFeature<T>() below needs. -->
+    <!-- Every project in this repo gets both Cluster-flavored core packages: IClusterMessageBus,
+         AbstractClusterMessageBus, ClusterFanOutMessage, ClusterSubscriptionEvent, etc. live in
+         ThunderPropagator.Application.Cluster; ChannelManager, IClusterNodeDiscovery, and the
+         IFeature/AddFeature<T>() plumbing AddFeature<T>() below needs live in ThunderPropagator.Cluster
+         (Infrastructure). Both shipped for the first time as of core issue #340/#346. -->
     <PackageReference Include="$(ThunderPropagatorPackageId)" />
+    <PackageReference Include="$(ThunderPropagatorApplicationPackageId)" />
     <!-- PackagePath="README.md" ensures consistent naming inside the package on case-sensitive Linux -->
     <None Include="$(MSBuildThisFileDirectory)ReadMe.md" Pack="true" PackagePath="README.md" />
   </ItemGroup>
