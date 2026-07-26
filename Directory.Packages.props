@@ -45,6 +45,9 @@
   <ItemGroup Label="Kafka">
     <PackageVersion Include="Confluent.Kafka" Version="2.14.2" />
   </ItemGroup>
+  <ItemGroup Label="RabbitMQ">
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
+  </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
