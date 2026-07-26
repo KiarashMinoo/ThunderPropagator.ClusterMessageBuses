@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using ThunderPropagator.ClusterMessageBuses.Kafka;
 using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ArchTests;
@@ -10,18 +11,20 @@ namespace ThunderPropagator.ArchTests;
 /// containment per assembly, no sibling-transport cross-dependencies, and an acyclic dependency
 /// graph across the whole repo.
 ///
-/// Only <see cref="ThunderPropagatorExtensions" />'s assembly (SharedKernel) exists today — there
-/// are no transport projects yet (see issue #1). <see cref="ClusterMessageBusAssemblies" /> and
-/// <see cref="ForbiddenDependencies" /> are written so adding a transport later is just a new
+/// Kafka is the first transport project (the rest of the roadmap in CLAUDE.md, plus gRPC #2 and
+/// ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" /> and
+/// <see cref="ForbiddenDependencies" /> are written so adding another transport later is just a new
 /// TheoryData row, not a new test method.
 /// </summary>
 public class ClusterMessageBusArchitectureTests
 {
     private const string SharedKernelNamespace = "ThunderPropagator.ClusterMessageBuses.SharedKernel";
+    private const string KafkaNamespace = "ThunderPropagator.ClusterMessageBuses.Kafka";
 
     public static TheoryData<Assembly, string> ClusterMessageBusAssemblies => new()
     {
         { typeof(ThunderPropagatorExtensions).Assembly, SharedKernelNamespace },
+        { typeof(KafkaClusterMessageBusExtensions).Assembly, KafkaNamespace },
     };
 
     [Theory]

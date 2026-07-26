@@ -17,6 +17,9 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk"/>
         <PackageReference Include="xunit"/>
         <PackageReference Include="xunit.runner.visualstudio"/>
+        <PackageReference Include="Confluent.Kafka"/>
+        <PackageReference Include="Microsoft.Extensions.Options"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -25,5 +28,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.SharedKernel\ThunderPropagator.ClusterMessageBuses.SharedKernel.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Kafka\ThunderPropagator.ClusterMessageBuses.Kafka.csproj" />
     </ItemGroup>
 </Project>

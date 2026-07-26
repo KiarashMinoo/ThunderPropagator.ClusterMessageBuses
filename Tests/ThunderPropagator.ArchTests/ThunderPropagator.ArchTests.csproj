@@ -25,5 +25,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.SharedKernel\ThunderPropagator.ClusterMessageBuses.SharedKernel.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Kafka\ThunderPropagator.ClusterMessageBuses.Kafka.csproj" />
     </ItemGroup>
 </Project>
