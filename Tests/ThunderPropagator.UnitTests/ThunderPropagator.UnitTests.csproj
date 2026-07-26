@@ -21,6 +21,7 @@
         <PackageReference Include="RabbitMQ.Client"/>
         <PackageReference Include="NATS.Net"/>
         <PackageReference Include="DotPulsar"/>
+        <PackageReference Include="MQTTnet"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
@@ -35,5 +36,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.RabbitMQ\ThunderPropagator.ClusterMessageBuses.RabbitMQ.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.NATS\ThunderPropagator.ClusterMessageBuses.NATS.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Pulsar\ThunderPropagator.ClusterMessageBuses.Pulsar.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Mqtt\ThunderPropagator.ClusterMessageBuses.Mqtt.csproj" />
     </ItemGroup>
 </Project>
