@@ -57,6 +57,10 @@
   <ItemGroup Label="Mqtt">
     <PackageVersion Include="MQTTnet" Version="5.2.0.1603" />
   </ItemGroup>
+  <ItemGroup Label="ActiveMQ">
+    <PackageVersion Include="Apache.NMS" Version="2.2.0" />
+    <PackageVersion Include="Apache.NMS.ActiveMQ" Version="2.2.0" />
+  </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />

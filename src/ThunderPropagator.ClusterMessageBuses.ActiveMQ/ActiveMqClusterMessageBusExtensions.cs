@@ -1,0 +1,50 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using ThunderPropagator.Application.Channels.Cluster.MessageBus;
+
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
+namespace ThunderPropagator.ClusterMessageBuses.ActiveMQ
+{
+    /// <summary>
+    /// DI registration for the ActiveMQ <see cref="IClusterMessageBus"/> transport.
+    /// </summary>
+    public static class ActiveMqClusterMessageBusExtensions
+    {
+        /// <summary>
+        /// Registers <see cref="ActiveMqClusterMessageBus"/> as the <see cref="IClusterMessageBus"/>
+        /// singleton: fan-out and subscription-event propagation over one JMS topic per channel
+        /// (every node running its own non-durable consumer, since plain JMS topic pub/sub already
+        /// delivers a copy of every message to every active subscriber), plus a hand-rolled
+        /// correlation-id request/reply scheme over one JMS queue pair per node for
+        /// <c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, and
+        /// <c>FetchPeerSubscriptionsAsync</c>. Requires
+        /// <see cref="ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration.NodeEndpoint"/>
+        /// to be set (reused purely as this node's destination-naming identity, not as a literal URL)
+        /// and a <see cref="ThunderPropagator.Infrastructure.Channels.ChannelManager"/> to already be
+        /// registered (added automatically by <c>AddThunderPropagator</c>).
+        /// </summary>
+        /// <remarks>
+        /// To use a different transport instead, register your own <see cref="IClusterMessageBus"/>
+        /// with <c>services.AddSingleton&lt;IClusterMessageBus, TImpl&gt;()</c> — this method
+        /// registers its own implementation with <c>TryAddSingleton</c>, which only fills the slot
+        /// if nothing is registered yet, so your registration wins whether it runs before or after
+        /// this call (or skip this call entirely). No core changes are needed to swap transports.
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// services.AddThunderPropagator(configSection)
+        ///         .AddClusterActiveMqMessageBus(options => options.BrokerUri = "activemq:tcp://broker1:61616");
+        /// </code>
+        /// </example>
+        public static IServiceCollection AddClusterActiveMqMessageBus(this IServiceCollection services, Action<ActiveMqClusterMessageBusOptions> configure)
+        {
+            services.Configure(configure);
+            services.TryAddSingleton<IClusterChannelResolver, ChannelManagerResolver>();
+            services.TryAddSingleton<ActiveMqClusterMessageBus>();
+            services.TryAddSingleton<IClusterMessageBus>(sp => sp.GetRequiredService<ActiveMqClusterMessageBus>());
+
+            return services;
+        }
+    }
+}

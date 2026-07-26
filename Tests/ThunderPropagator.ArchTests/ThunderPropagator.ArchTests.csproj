@@ -30,5 +30,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.NATS\ThunderPropagator.ClusterMessageBuses.NATS.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Pulsar\ThunderPropagator.ClusterMessageBuses.Pulsar.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Mqtt\ThunderPropagator.ClusterMessageBuses.Mqtt.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.ActiveMQ\ThunderPropagator.ClusterMessageBuses.ActiveMQ.csproj" />
     </ItemGroup>
 </Project>
