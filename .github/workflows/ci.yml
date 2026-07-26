@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main] # beta invokes automatically on every push. Manual dispatch covers both beta and release.
+  workflow_dispatch:
+    inputs:
+      release-mode:
+        description: Channel for this manual run -- 'beta' or 'release'. Defaults to 'beta' if left unset.
+        type: choice
+        options:
+          - beta
+          - release
+        default: beta
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+
+jobs:
+  # This repo has not published a NuGet package yet (see issue #1 — scaffolding only, no
+  # IClusterMessageBus implementation exists). publish-to-nuget is left false below; flip it to
+  # true once the first transport (gRPC, #2, or ZeroMQ, #3) is ready to ship, and add the same
+  # secrets the rest of the ThunderPropagator family uses for reusable-ci.yml's inline publish-nuget
+  # job: NUGET_API_KEY (classic API key from nuget.org, Settings > Secrets and variables > Actions),
+  # and — only if this repo's default branch ever gets a "require PR before merging" protection
+  # rule with no usable bypass for github-actions[bot] — an ADMIN_PUSH_TOKEN PAT from an
+  # admin-role account, passed through as push-token so the version-bump commit can push directly.
+  #
+  # IMPORTANT: a job-level `permissions:` block is exhaustive, not additive -- any scope not listed
+  # here is implicitly set to "none" for every nested job the called reusable workflow runs,
+  # regardless of what that nested job requests for itself. This must list every scope ANY job in
+  # reusable-ci.yml needs across the whole run: contents:write (version/changelog commit, tag,
+  # GitHub Release), packages:write + id-token:write (publish-nuget, for GitHub Packages / OIDC
+  # respectively, if ever switched on), actions:write (cleanup-nuget-artifacts, to delete run
+  # artifacts).
+  #
+  # beta-ci and manual-ci are gated by BOTH github.event_name and github.ref (not ref alone) so a
+  # manual workflow_dispatch run from main can't accidentally trigger both jobs at once: beta-ci
+  # only ever fires on an automatic push to main. manual-ci only ever fires on a manual dispatch,
+  # and uses whatever channel the release-mode input was set to, defaulting to 'beta' if the
+  # dispatcher left it unset -- so an unconfigured manual run is still just a beta, not an
+  # accidental release.
+  beta-ci:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      actions: write
+    uses: KiarashMinoo/.github/.github/workflows/reusable-ci.yml@main
+    with:
+      channel: beta
+      solution-path: 'ThunderPropagator.ClusterMessageBuses.slnx'
+      publish-to-nuget: false
+    secrets:
+      gh-token: ${{ secrets.GITHUB_TOKEN }}
+
+  manual-ci:
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      actions: write
+    uses: KiarashMinoo/.github/.github/workflows/reusable-ci.yml@main
+    with:
+      channel: ${{ inputs.release-mode }}
+      solution-path: 'ThunderPropagator.ClusterMessageBuses.slnx'
+      publish-to-nuget: false
+    secrets:
+      gh-token: ${{ secrets.GITHUB_TOKEN }}

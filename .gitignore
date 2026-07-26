@@ -1,0 +1,67 @@
+# ============================================================
+# Operating System Files
+# ============================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ============================================================
+# Editor & IDE State
+# ============================================================
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.*~
+
+.vs/
+.vscode/
+.idea/
+.fleet/
+.cr/
+
+# ============================================================
+# Local Tooling & Agent State
+# ============================================================
+.claude/
+.shared-props/
+.obsidian/
+graphify-out/
+.graphify*
+
+# ============================================================
+# .NET Build Output
+# ============================================================
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Bb]uild/
+bld/
+x64/
+x86/
+artifacts/
+nupkg/
+TestResults/
+
+# ============================================================
+# Dependency & Package Artifacts
+# ============================================================
+project.lock.json
+*.nupkg
+*.snupkg
+packages/
+
+# ============================================================
+# Logs, Reports & Generated Runtime Data
+# ============================================================
+*.binlog
+*.log
+msbuild.log
+msbuild.err
+msbuild.wrn
+logs/
