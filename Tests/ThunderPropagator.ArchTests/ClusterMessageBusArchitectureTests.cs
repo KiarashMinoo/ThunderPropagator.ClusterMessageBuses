@@ -3,6 +3,7 @@ using FluentAssertions;
 using NetArchTest.Rules;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 using ThunderPropagator.ClusterMessageBuses.NATS;
+using ThunderPropagator.ClusterMessageBuses.Pulsar;
 using ThunderPropagator.ClusterMessageBuses.RabbitMQ;
 using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
@@ -14,8 +15,8 @@ namespace ThunderPropagator.ArchTests;
 /// containment per assembly, no sibling-transport cross-dependencies, and an acyclic dependency
 /// graph across the whole repo.
 ///
-/// Kafka, RabbitMQ, and NATS are the first three transport projects (the rest of the roadmap in
-/// CLAUDE.md, plus gRPC #2 and ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" />
+/// Kafka, RabbitMQ, NATS, and Pulsar are the first four transport projects (the rest of the roadmap
+/// in CLAUDE.md, plus gRPC #2 and ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" />
 /// and <see cref="ForbiddenDependencies" /> are written so adding another transport later is just a
 /// new TheoryData row, not a new test method.
 /// </summary>
@@ -25,6 +26,7 @@ public class ClusterMessageBusArchitectureTests
     private const string KafkaNamespace = "ThunderPropagator.ClusterMessageBuses.Kafka";
     private const string RabbitMqNamespace = "ThunderPropagator.ClusterMessageBuses.RabbitMQ";
     private const string NatsNamespace = "ThunderPropagator.ClusterMessageBuses.NATS";
+    private const string PulsarNamespace = "ThunderPropagator.ClusterMessageBuses.Pulsar";
 
     public static TheoryData<Assembly, string> ClusterMessageBusAssemblies => new()
     {
@@ -32,6 +34,7 @@ public class ClusterMessageBusArchitectureTests
         { typeof(KafkaClusterMessageBusExtensions).Assembly, KafkaNamespace },
         { typeof(RabbitMqClusterMessageBusExtensions).Assembly, RabbitMqNamespace },
         { typeof(NatsClusterMessageBusExtensions).Assembly, NatsNamespace },
+        { typeof(PulsarClusterMessageBusExtensions).Assembly, PulsarNamespace },
     };
 
     [Theory]
@@ -62,9 +65,10 @@ public class ClusterMessageBusArchitectureTests
     // forbids every *other* transport's namespace.
     public static TheoryData<Assembly, string[]> ForbiddenDependencies => new()
     {
-        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace] },
-        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace] },
-        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace] },
+        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace, PulsarNamespace] },
+        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace, PulsarNamespace] },
+        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, PulsarNamespace] },
+        { typeof(PulsarClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace] },
     };
 
     [Theory]

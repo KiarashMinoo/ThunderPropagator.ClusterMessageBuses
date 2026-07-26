@@ -20,6 +20,7 @@
         <PackageReference Include="Confluent.Kafka"/>
         <PackageReference Include="RabbitMQ.Client"/>
         <PackageReference Include="NATS.Net"/>
+        <PackageReference Include="DotPulsar"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
@@ -33,5 +34,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Kafka\ThunderPropagator.ClusterMessageBuses.Kafka.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.RabbitMQ\ThunderPropagator.ClusterMessageBuses.RabbitMQ.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.NATS\ThunderPropagator.ClusterMessageBuses.NATS.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Pulsar\ThunderPropagator.ClusterMessageBuses.Pulsar.csproj" />
     </ItemGroup>
 </Project>

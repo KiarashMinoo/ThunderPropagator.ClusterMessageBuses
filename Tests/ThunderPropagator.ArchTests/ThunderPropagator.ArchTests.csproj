@@ -28,5 +28,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Kafka\ThunderPropagator.ClusterMessageBuses.Kafka.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.RabbitMQ\ThunderPropagator.ClusterMessageBuses.RabbitMQ.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.NATS\ThunderPropagator.ClusterMessageBuses.NATS.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Pulsar\ThunderPropagator.ClusterMessageBuses.Pulsar.csproj" />
     </ItemGroup>
 </Project>
