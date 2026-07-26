@@ -7,6 +7,7 @@ using ThunderPropagator.ClusterMessageBuses.Mqtt;
 using ThunderPropagator.ClusterMessageBuses.NATS;
 using ThunderPropagator.ClusterMessageBuses.Pulsar;
 using ThunderPropagator.ClusterMessageBuses.RabbitMQ;
+using ThunderPropagator.ClusterMessageBuses.RedisPubSub;
 using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ArchTests;
@@ -17,10 +18,10 @@ namespace ThunderPropagator.ArchTests;
 /// containment per assembly, no sibling-transport cross-dependencies, and an acyclic dependency
 /// graph across the whole repo.
 ///
-/// Kafka, RabbitMQ, NATS, Pulsar, MQTT, and ActiveMQ are the first six transport projects (the rest
-/// of the roadmap in CLAUDE.md, plus gRPC #2 and ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" />
-/// and <see cref="ForbiddenDependencies" /> are written so adding another transport later is just a
-/// new TheoryData row, not a new test method.
+/// Kafka, RabbitMQ, NATS, Pulsar, MQTT, ActiveMQ, and RedisPubSub are the first seven transport
+/// projects (the rest of the roadmap in CLAUDE.md, plus gRPC #2 and ZeroMQ #3, are still to come).
+/// <see cref="ClusterMessageBusAssemblies" /> and <see cref="ForbiddenDependencies" /> are written so
+/// adding another transport later is just a new TheoryData row, not a new test method.
 /// </summary>
 public class ClusterMessageBusArchitectureTests
 {
@@ -31,6 +32,7 @@ public class ClusterMessageBusArchitectureTests
     private const string PulsarNamespace = "ThunderPropagator.ClusterMessageBuses.Pulsar";
     private const string MqttNamespace = "ThunderPropagator.ClusterMessageBuses.Mqtt";
     private const string ActiveMqNamespace = "ThunderPropagator.ClusterMessageBuses.ActiveMQ";
+    private const string RedisPubSubNamespace = "ThunderPropagator.ClusterMessageBuses.RedisPubSub";
 
     public static TheoryData<Assembly, string> ClusterMessageBusAssemblies => new()
     {
@@ -41,6 +43,7 @@ public class ClusterMessageBusArchitectureTests
         { typeof(PulsarClusterMessageBusExtensions).Assembly, PulsarNamespace },
         { typeof(MqttClusterMessageBusExtensions).Assembly, MqttNamespace },
         { typeof(ActiveMqClusterMessageBusExtensions).Assembly, ActiveMqNamespace },
+        { typeof(RedisPubSubClusterMessageBusExtensions).Assembly, RedisPubSubNamespace },
     };
 
     [Theory]
@@ -71,12 +74,13 @@ public class ClusterMessageBusArchitectureTests
     // forbids every *other* transport's namespace.
     public static TheoryData<Assembly, string[]> ForbiddenDependencies => new()
     {
-        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace] },
-        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace] },
-        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace] },
-        { typeof(PulsarClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, MqttNamespace, ActiveMqNamespace] },
-        { typeof(MqttClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, ActiveMqNamespace] },
-        { typeof(ActiveMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace] },
+        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace] },
+        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace] },
+        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace] },
+        { typeof(PulsarClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace] },
+        { typeof(MqttClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, ActiveMqNamespace, RedisPubSubNamespace] },
+        { typeof(ActiveMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, RedisPubSubNamespace] },
+        { typeof(RedisPubSubClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace] },
     };
 
     [Theory]

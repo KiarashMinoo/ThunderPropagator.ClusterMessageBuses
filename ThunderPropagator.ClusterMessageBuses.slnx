@@ -55,6 +55,11 @@
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
     </Project>
+    <Project Path="src/ThunderPropagator.ClusterMessageBuses.RedisPubSub/ThunderPropagator.ClusterMessageBuses.RedisPubSub.csproj">
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|x86" Project="x86" />
+    </Project>
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/ThunderPropagator.ArchTests/ThunderPropagator.ArchTests.csproj">
