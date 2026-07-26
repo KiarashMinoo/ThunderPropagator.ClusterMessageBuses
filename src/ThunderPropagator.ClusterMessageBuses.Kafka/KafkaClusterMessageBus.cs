@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using ThunderPropagator.Application.Channels.Cluster;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.ClusterMessageBuses.Kafka
 {
     /// <summary>
@@ -17,7 +19,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
     /// <see cref="FetchPeerSubscriptionsAsync"/>) use a broker-native request/reply scheme: every
     /// node listens on its own request topic (named from its own
     /// <see cref="ClusterConfiguration.NodeEndpoint"/>) and answers by resolving the requested
-    /// channel locally via <see cref="IKafkaChannelResolver"/> and the protected members exposed by
+    /// channel locally via <see cref="IClusterChannelResolver"/> and the protected members exposed by
     /// <see cref="AbstractClusterMessageBus"/>, replying on the requester's own reply topic.
     /// </summary>
     /// <remarks>
@@ -30,7 +32,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
     {
         private readonly KafkaClusterMessageBusOptions _options;
         private readonly Uri _nodeEndpoint;
-        private readonly IKafkaChannelResolver _channelResolver;
+        private readonly IClusterChannelResolver _channelResolver;
         private readonly ILogger _logger;
         private readonly Guid _selfId = Guid.NewGuid();
 
@@ -57,7 +59,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         public KafkaClusterMessageBus(
             IOptions<KafkaClusterMessageBusOptions> options,
             ClusterConfiguration clusterConfiguration,
-            IKafkaChannelResolver channelResolver,
+            IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
             Func<ProducerConfig, IProducer<string, string>>? producerFactory = null,
             Func<ConsumerConfig, IConsumer<string, string>>? consumerFactory = null)

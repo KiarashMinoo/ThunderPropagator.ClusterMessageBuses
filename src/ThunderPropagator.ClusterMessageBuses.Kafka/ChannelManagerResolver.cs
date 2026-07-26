@@ -1,23 +1,4 @@
-using ThunderPropagator.Application.Channels;
-using ThunderPropagator.Infrastructure.Channels;
-
-namespace ThunderPropagator.ClusterMessageBuses.Kafka
-{
-    /// <summary>
-    /// Production <see cref="IKafkaChannelResolver"/> — delegates straight to the real,
-    /// DI-registered <see cref="ChannelManager"/> singleton.
-    /// </summary>
-    internal sealed class ChannelManagerResolver : IKafkaChannelResolver
-    {
-        private readonly ChannelManager _channelManager;
-
-        public ChannelManagerResolver(ChannelManager channelManager)
-        {
-            _channelManager = channelManager;
-        }
-
-        public IChannel GetChannel(string channelName) => _channelManager.GetChannel(channelName);
-
-        public IChannel GetChannel(Guid channelKey) => _channelManager.GetChannel(channelKey);
-    }
-}
+// Consolidated into ThunderPropagator.ClusterMessageBuses.SharedKernel.ChannelManagerResolver so
+// every transport project shares one definition instead of redefining it per transport. This file
+// is kept empty (rather than deleted) only because the sandbox this was authored in couldn't
+// unlink it — safe to delete for real once reviewed.

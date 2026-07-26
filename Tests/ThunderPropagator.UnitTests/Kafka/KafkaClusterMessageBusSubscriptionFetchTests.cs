@@ -7,6 +7,8 @@ using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 using ThunderPropagator.Infrastructure.Channels;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.UnitTests.Kafka;
 
 public class KafkaClusterMessageBusSubscriptionFetchTests
@@ -19,7 +21,7 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-1", "req-1", "conn-1") };
         channel.GetLocalClusterSubscriptionDescriptors().Returns(descriptors);
 
-        var resolver = Substitute.For<IKafkaChannelResolver>();
+        var resolver = Substitute.For<IClusterChannelResolver>();
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
@@ -36,7 +38,7 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
     public async Task BuildResponseAsync_UnknownChannelKey_ReturnsAFailureResponseInsteadOfThrowing()
     {
         var channelKey = Guid.NewGuid();
-        var resolver = Substitute.For<IKafkaChannelResolver>();
+        var resolver = Substitute.For<IClusterChannelResolver>();
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);

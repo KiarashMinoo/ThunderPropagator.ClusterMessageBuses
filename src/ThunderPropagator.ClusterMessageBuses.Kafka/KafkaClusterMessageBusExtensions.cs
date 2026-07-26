@@ -2,6 +2,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.ClusterMessageBuses.Kafka
 {
     /// <summary>
@@ -36,7 +38,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         public static IServiceCollection AddClusterKafkaMessageBus(this IServiceCollection services, Action<KafkaClusterMessageBusOptions> configure)
         {
             services.Configure(configure);
-            services.TryAddSingleton<IKafkaChannelResolver, ChannelManagerResolver>();
+            services.TryAddSingleton<IClusterChannelResolver, ChannelManagerResolver>();
             services.TryAddSingleton<KafkaClusterMessageBus>();
             services.TryAddSingleton<IClusterMessageBus>(sp => sp.GetRequiredService<KafkaClusterMessageBus>());
 

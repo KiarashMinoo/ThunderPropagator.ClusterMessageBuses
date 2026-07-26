@@ -4,6 +4,8 @@ using Microsoft.Extensions.Options;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.UnitTests.Kafka;
 
 public class KafkaClusterMessageBusExtensionsTests
@@ -16,7 +18,7 @@ public class KafkaClusterMessageBusExtensionsTests
         services.AddClusterKafkaMessageBus(options => options.BootstrapServers = "broker:9092");
 
         services.Should().Contain(d => d.ServiceType == typeof(IClusterMessageBus));
-        services.Should().Contain(d => d.ServiceType == typeof(IKafkaChannelResolver));
+        services.Should().Contain(d => d.ServiceType == typeof(IClusterChannelResolver));
     }
 
     [Fact]

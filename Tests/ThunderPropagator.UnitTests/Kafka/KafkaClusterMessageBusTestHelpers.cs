@@ -5,13 +5,15 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.UnitTests.Kafka;
 
 /// <summary>
 /// Shared construction helpers for <see cref="KafkaClusterMessageBus"/> tests. Every test
 /// constructs the bus through the same seams the production DI extension uses
 /// (<c>IOptions&lt;KafkaClusterMessageBusOptions&gt;</c>, <c>ClusterConfiguration</c>,
-/// <c>IKafkaChannelResolver</c>, producer/consumer factory delegates) so no test ever needs a live
+/// <c>IClusterChannelResolver</c>, producer/consumer factory delegates) so no test ever needs a live
 /// Kafka broker: <see cref="Confluent.Kafka.IProducer{TKey,TValue}"/> and
 /// <see cref="Confluent.Kafka.IConsumer{TKey,TValue}"/> are both plain interfaces, substituted
 /// directly with NSubstitute.
@@ -38,13 +40,13 @@ internal static class KafkaClusterMessageBusTestHelpers
 
     internal static KafkaClusterMessageBus CreateBus(
         IProducer<string, string>? producer = null,
-        IKafkaChannelResolver? channelResolver = null,
+        IClusterChannelResolver? channelResolver = null,
         Uri? nodeEndpoint = null,
         TimeSpan? requestTimeout = null,
         Func<ConsumerConfig, IConsumer<string, string>>? consumerFactory = null)
     {
         producer ??= Substitute.For<IProducer<string, string>>();
-        channelResolver ??= Substitute.For<IKafkaChannelResolver>();
+        channelResolver ??= Substitute.For<IClusterChannelResolver>();
 
         var options = Options.Create(new KafkaClusterMessageBusOptions
         {

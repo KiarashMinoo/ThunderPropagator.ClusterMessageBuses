@@ -8,6 +8,8 @@ using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.UnitTests.Kafka;
 
 public class KafkaClusterMessageBusSnapshotsTests
@@ -33,7 +35,7 @@ public class KafkaClusterMessageBusSnapshotsTests
         channel.SearchSnapshotsAsync(Arg.Any<Func<SnapshotEntry, bool>>(), 0, 0, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(entries));
 
-        var resolver = Substitute.For<IKafkaChannelResolver>();
+        var resolver = Substitute.For<IClusterChannelResolver>();
         resolver.GetChannel("Orders").Returns(channel);
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
@@ -57,7 +59,7 @@ public class KafkaClusterMessageBusSnapshotsTests
             .Returns(Task.FromResult(updated));
         channel.GetSnapshotTombstonesSince(Arg.Any<DateTimeOffset>()).Returns([7, 8]);
 
-        var resolver = Substitute.For<IKafkaChannelResolver>();
+        var resolver = Substitute.For<IClusterChannelResolver>();
         resolver.GetChannel("Orders").Returns(channel);
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
@@ -75,7 +77,7 @@ public class KafkaClusterMessageBusSnapshotsTests
     [Fact]
     public async Task BuildResponseAsync_UnknownChannelName_ReturnsAFailureResponseInsteadOfThrowing()
     {
-        var resolver = Substitute.For<IKafkaChannelResolver>();
+        var resolver = Substitute.For<IClusterChannelResolver>();
         resolver.GetChannel("Missing").Returns(_ => throw new InvalidOperationException("channel Missing could not be found!"));
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);

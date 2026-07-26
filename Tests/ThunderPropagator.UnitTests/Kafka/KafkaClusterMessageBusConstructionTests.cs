@@ -8,6 +8,8 @@ using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.UnitTests.Kafka;
 
 public class KafkaClusterMessageBusConstructionTests
@@ -21,7 +23,7 @@ public class KafkaClusterMessageBusConstructionTests
         var act = () => new KafkaClusterMessageBus(
             options,
             clusterConfiguration,
-            Substitute.For<IKafkaChannelResolver>(),
+            Substitute.For<IClusterChannelResolver>(),
             NullLoggerFactory.Instance,
             _ => Substitute.For<IProducer<string, string>>(),
             KafkaClusterMessageBusTestHelpers.AlwaysCancelledConsumerFactory());
