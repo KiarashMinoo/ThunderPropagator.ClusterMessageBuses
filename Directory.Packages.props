@@ -43,13 +43,13 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.*" />
   </ItemGroup>
   <ItemGroup Label="Kafka">
-    <PackageVersion Include="Confluent.Kafka" Version="2.14.2" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
   </ItemGroup>
   <ItemGroup Label="RabbitMQ">
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
   </ItemGroup>
   <ItemGroup Label="NATS">
-    <PackageVersion Include="NATS.Net" Version="3.0.0" />
+    <PackageVersion Include="NATS.Net" Version="3.0.1" />
   </ItemGroup>
   <ItemGroup Label="Pulsar">
     <PackageVersion Include="DotPulsar" Version="5.3.1" />
