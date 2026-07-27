@@ -27,6 +27,7 @@
         <PackageReference Include="StackExchange.Redis"/>
         <PackageReference Include="AWSSDK.SQS"/>
         <PackageReference Include="AWSSDK.SimpleNotificationService"/>
+        <PackageReference Include="Azure.Messaging.ServiceBus"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>

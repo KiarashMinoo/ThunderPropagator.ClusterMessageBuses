@@ -1,0 +1,51 @@
+version: 2
+updates:
+  # Keep NuGet packages up-to-date.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "security"
+    open-pull-requests-limit: 10
+    groups:
+      messaging:
+        patterns:
+          - "Confluent.*"
+          - "RabbitMQ.Client"
+          - "Apache.NMS*"
+          - "MQTTnet*"
+          - "DotPulsar"
+          - "NATS.Net"
+      redis-and-resilience:
+        patterns:
+          - "StackExchange.Redis*"
+          - "Microsoft.Extensions.Caching.StackExchangeRedis"
+          - "Microsoft.Extensions.Http.Polly"
+          - "Microsoft.Extensions.Http.Resilience"
+      testing:
+        patterns:
+          - "xunit*"
+          - "NSubstitute"
+          - "coverlet.*"
+          - "NetArchTest.Rules"
+          - "Bogus"
+          - "Microsoft.NET.Test.Sdk"
+
+  # Keep GitHub Actions pinned and up-to-date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "security"
+      - "ci"
+    open-pull-requests-limit: 5

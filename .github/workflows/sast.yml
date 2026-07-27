@@ -2,10 +2,11 @@ name: SAST — Static Analysis Security Testing
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   schedule:
-    - cron: '0 0 * * *'   # 12:00 AM UTC daily
-    - cron: '0 12 * * *'  # 12:00 PM UTC daily
+    # Weekly is plenty — SAST already runs on every push to develop, this is
+    # just a safety net for stale branches / newly-disclosed CVEs.
+    - cron: '0 3 * * 5'   # Friday 03:00 UTC
   workflow_dispatch:
     inputs:
       enable-codeql:

@@ -14,8 +14,8 @@
          Debug/Release/AnyCPU/x64 packaging, unrelated to which flavor of the upstream core packages
          we depend on) — so it's hardcoded here rather than reusing those MSBuild properties. -->
     <ThunderPropagatorVersion>1.0.1-beta.195</ThunderPropagatorVersion>
-    <ThunderPropagatorPackageId>ThunderPropagator.Cluster</ThunderPropagatorPackageId>
-    <ThunderPropagatorApplicationPackageId>ThunderPropagator.Application.Cluster</ThunderPropagatorApplicationPackageId>
+    <ThunderPropagatorPackageId>ThunderPropagator.Cluster$(PackageIdPlatformSuffix)</ThunderPropagatorPackageId>
+    <ThunderPropagatorApplicationPackageId>ThunderPropagator.Application.Cluster$(PackageIdPlatformSuffix)</ThunderPropagatorApplicationPackageId>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="$(BuildingBlocksPackageId)" Version="$(BuildingBlocksVersion)" />
@@ -70,6 +70,10 @@
          repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
     <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.5" />
     <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.5" />
+  </ItemGroup>
+  <ItemGroup Label="AzureServiceBus">
+    <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
+    <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.2" />
   </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />

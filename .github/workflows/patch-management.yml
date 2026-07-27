@@ -1,0 +1,57 @@
+name: Patch Management — Dependency Vulnerability & Update Audit
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      # Re-audit whenever dependency manifests change
+      - 'Directory.Packages.props'
+      - 'Directory.Build.props'
+      - '**/*.csproj'
+  schedule:
+    # Full audit every Thursday at 08:00 UTC (offset from Monday SAST run)
+    - cron: '0 8 * * 4'
+  workflow_dispatch:
+    inputs:
+      fail-on-vulnerable:
+        description: Fail when packages with known CVEs are found
+        type: boolean
+        default: true
+      fail-on-outdated:
+        description: Fail when packages with available updates are found
+        type: boolean
+        default: false
+      create-issue:
+        description: Open a GitHub issue summarizing findings
+        type: boolean
+        default: true
+      owasp-fail-cvss:
+        description: CVSS score threshold at which OWASP DC fails the build (0-10)
+        type: number
+        default: 7
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  security-events: write
+
+jobs:
+  patch-management:
+    uses: KiarashMinoo/.github/.github/workflows/reusable-patch-management.yml@main
+    with:
+      dotnet-versions: |
+        8.0.x
+        9.0.x
+        10.0.x
+      solution-path: 'ThunderPropagator.ClusterMessageBuses.slnx'
+      fail-on-vulnerable: ${{ github.event_name == 'workflow_dispatch' && inputs.fail-on-vulnerable || true }}
+      fail-on-outdated: ${{ github.event_name == 'workflow_dispatch' && inputs.fail-on-outdated || false }}
+      create-issue: ${{ github.event_name == 'workflow_dispatch' && inputs.create-issue || true }}
+      owasp-fail-cvss: ${{ github.event_name == 'workflow_dispatch' && inputs.owasp-fail-cvss || 7 }}
+      owasp-suppression-file: 'owasp-suppression.xml'
+    secrets:
+      gh-token: ${{ secrets.GITHUB_TOKEN }}

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main] # beta invokes automatically on every push. Manual dispatch covers both beta and release.
+    branches: [develop] # beta invokes automatically on every push. Manual dispatch covers both beta and release.
   workflow_dispatch:
     inputs:
       release-mode:
@@ -15,34 +15,47 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/develop' }}
 
 jobs:
-  # This repo has not published a NuGet package yet (see issue #1 — scaffolding only, no
-  # IClusterMessageBus implementation exists). publish-to-nuget is left false below; flip it to
-  # true once the first transport (gRPC, #2, or ZeroMQ, #3) is ready to ship, and add the same
-  # secrets the rest of the ThunderPropagator family uses for reusable-ci.yml's inline publish-nuget
-  # job: NUGET_API_KEY (classic API key from nuget.org, Settings > Secrets and variables > Actions),
-  # and — only if this repo's default branch ever gets a "require PR before merging" protection
-  # rule with no usable bypass for github-actions[bot] — an ADMIN_PUSH_TOKEN PAT from an
-  # admin-role account, passed through as push-token so the version-bump commit can push directly.
+  # NuGet.org Trusted Publishing (OIDC) is built directly into reusable-ci.yml (it has
+  # its own inline publish-nuget job) — this repo doesn't need its own. reusable-ci.yml
+  # defaults to nuget-auth-mode: 'classic', which pushes with a plain NuGet.org API key
+  # (secrets.nuget-api-key) instead of OIDC Trusted Publishing -- OIDC doesn't work
+  # through a reusable workflow hosted in a different repo (see reusable-ci.yml's
+  # nuget-auth-mode input description for the full explanation). Set a repo secret
+  # named NUGET_API_KEY (Settings > Secrets and variables > Actions > Secrets) with a
+  # classic API key from nuget.org > API Keys, scoped to this package/owner.
   #
-  # IMPORTANT: a job-level `permissions:` block is exhaustive, not additive -- any scope not listed
-  # here is implicitly set to "none" for every nested job the called reusable workflow runs,
-  # regardless of what that nested job requests for itself. This must list every scope ANY job in
-  # reusable-ci.yml needs across the whole run: contents:write (version/changelog commit, tag,
-  # GitHub Release), packages:write + id-token:write (publish-nuget, for GitHub Packages / OIDC
-  # respectively, if ever switched on), actions:write (cleanup-nuget-artifacts, to delete run
-  # artifacts).
+  # ADMIN_PUSH_TOKEN: develop has a classic "Require a pull request before merging"
+  # branch protection rule with no usable bypass for the default GITHUB_TOKEN identity
+  # (github-actions[bot]) -- neither classic protection's "administrators can bypass"
+  # toggle nor this (personal, non-org) repo's Ruleset bypass list can be granted to
+  # that identity, only to a real admin-role account. So a Personal Access Token
+  # belonging to an account with Admin role on this repo is stored as the ADMIN_PUSH_TOKEN
+  # secret and passed through as push-token, which reusable-ci.yml's version job uses
+  # (instead of gh-token) ONLY for the checkout that sets up the git credential the
+  # later version-bump commit push reuses. That admin account's role must also be added
+  # to the branch protection/ruleset's bypass list on GitHub's side for this to work.
   #
-  # beta-ci and manual-ci are gated by BOTH github.event_name and github.ref (not ref alone) so a
-  # manual workflow_dispatch run from main can't accidentally trigger both jobs at once: beta-ci
-  # only ever fires on an automatic push to main. manual-ci only ever fires on a manual dispatch,
-  # and uses whatever channel the release-mode input was set to, defaulting to 'beta' if the
-  # dispatcher left it unset -- so an unconfigured manual run is still just a beta, not an
-  # accidental release.
+  # IMPORTANT: a job-level `permissions:` block is exhaustive, not additive -- any
+  # scope not listed here is implicitly set to "none" for every nested job the called
+  # reusable workflow runs, regardless of what that nested job requests for itself.
+  # This must list every scope ANY job in reusable-ci.yml needs across the whole run:
+  # contents:write (version/changelog commit, tag, GitHub Release), packages:write +
+  # id-token:write (publish-nuget, for GitHub Packages / OIDC respectively, if ever
+  # switched on), actions:write (cleanup-nuget-artifacts, to delete run artifacts).
+  #
+  # beta-ci and manual-ci are gated by BOTH github.event_name and github.ref (not ref
+  # alone) so a manual workflow_dispatch run from develop can't accidentally trigger
+  # both jobs at once: beta-ci only ever fires on an automatic push to develop.
+  # manual-ci only ever fires on a manual dispatch (from develop -- this repo doesn't
+  # cut separate release/** branches -- or a release/** branch if it ever does), and
+  # uses whatever channel the release-mode input was set to, defaulting to 'beta' if
+  # the dispatcher left it unset -- so an unconfigured manual run is still just a beta,
+  # not an accidental release.
   beta-ci:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     permissions:
       contents: write
       packages: write
@@ -52,12 +65,16 @@ jobs:
     with:
       channel: beta
       solution-path: 'ThunderPropagator.ClusterMessageBuses.slnx'
-      publish-to-nuget: false
+      publish-to-nuget: true
+      nuget-target: 'nuget.org'
+      nuget-auth-mode: 'classic'
     secrets:
       gh-token: ${{ secrets.GITHUB_TOKEN }}
+      push-token: ${{ secrets.ADMIN_PUSH_TOKEN }}
+      nuget-api-key: ${{ secrets.NUGET_API_KEY }}
 
   manual-ci:
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/'))
     permissions:
       contents: write
       packages: write
@@ -67,6 +84,10 @@ jobs:
     with:
       channel: ${{ inputs.release-mode }}
       solution-path: 'ThunderPropagator.ClusterMessageBuses.slnx'
-      publish-to-nuget: false
+      publish-to-nuget: true
+      nuget-target: 'nuget.org'
+      nuget-auth-mode: 'classic'
     secrets:
       gh-token: ${{ secrets.GITHUB_TOKEN }}
+      push-token: ${{ secrets.ADMIN_PUSH_TOKEN }}
+      nuget-api-key: ${{ secrets.NUGET_API_KEY }}

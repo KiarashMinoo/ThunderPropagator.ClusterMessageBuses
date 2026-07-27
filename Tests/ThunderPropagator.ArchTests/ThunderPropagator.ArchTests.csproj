@@ -37,5 +37,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.TcpSocket\ThunderPropagator.ClusterMessageBuses.TcpSocket.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.UdpClient\ThunderPropagator.ClusterMessageBuses.UdpClient.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AwsSqs\ThunderPropagator.ClusterMessageBuses.AwsSqs.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AzureServiceBus\ThunderPropagator.ClusterMessageBuses.AzureServiceBus.csproj" />
     </ItemGroup>
 </Project>

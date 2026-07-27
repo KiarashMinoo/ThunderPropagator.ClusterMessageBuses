@@ -1,0 +1,64 @@
+version: 2
+updates:
+  # Keep NuGet packages up-to-date.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "security"
+    open-pull-requests-limit: 10
+    groups:
+      messaging:
+        patterns:
+          - "Confluent.*"
+          - "RabbitMQ.Client"
+          - "Apache.NMS*"
+          - "MQTTnet*"
+          - "DotPulsar"
+          - "NATS.Net"
+      redis-and-resilience:
+        patterns:
+          - "StackExchange.Redis*"
+      testing:
+        patterns:
+          - "xunit*"
+          - "NSubstitute"
+          - "coverlet.*"
+          - "NetArchTest.Rules"
+          - "Bogus"
+          - "Microsoft.NET.Test.Sdk"
+    # These are pinned per-TargetFramework in Directory.Packages.props (net8.0 -> 8.*,
+    # net9.0 -> 9.*, net10.0 -> 10.*) — CentralPackageFloatingVersionsEnabled already
+    # floats each to the latest matching release at restore time, and Dependabot can't
+    # represent one package pinned to three different major versions depending on TFM
+    # as a single update target, so they're ignored here to avoid incorrect/duplicate PRs.
+    # (Microsoft.Extensions.Caching.StackExchangeRedis/.Http.Polly/.Http.Resilience were
+    # also dropped from the redis-and-resilience group above for the same reason — only
+    # StackExchange.Redis* itself is still a real update target there.)
+    ignore:
+      - dependency-name: "Microsoft.Extensions.Diagnostics.Testing"
+      - dependency-name: "Microsoft.Extensions.Caching.StackExchangeRedis"
+      - dependency-name: "Microsoft.Extensions.Http.Polly"
+      - dependency-name: "Microsoft.Extensions.Diagnostics.HealthChecks"
+      - dependency-name: "Microsoft.Extensions.Configuration.Binder"
+      - dependency-name: "Microsoft.Extensions.Http.Resilience"
+      - dependency-name: "Microsoft.AspNetCore.Connections.Abstractions"
+
+  # Keep GitHub Actions pinned and up-to-date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "security"
+      - "ci"
+    open-pull-requests-limit: 5
