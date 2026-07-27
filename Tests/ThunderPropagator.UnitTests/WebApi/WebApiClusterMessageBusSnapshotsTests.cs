@@ -4,6 +4,7 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.Application.Channels;
 using ThunderPropagator.Application.Channels.Snapshots;
+using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.WebApi;
@@ -50,9 +51,13 @@ public class WebApiClusterMessageBusSnapshotsTests
     [Fact]
     public async Task RestoreFromLeaderAsync_AppliesEveryActiveEntryFromTheResponse()
     {
+        // SnapshotEntry has an internal constructor and no public/settable properties — it can only
+        // be constructed directly (not via an object initializer) thanks to the
+        // InternalsVisibleTo("ThunderPropagator.UnitTests") grant on ThunderPropagator.Application.
+        // Defaults to SnapshotEntryState.Active, which is all this test needs.
         var entries = new[]
         {
-            new SnapshotEntry { HashKey = 1, State = SnapshotEntryState.Active },
+            new SnapshotEntry(1, new Dictionary<string, object?>(), CastType.Broadcast, new Dictionary<string, object?>()),
         };
 
         var httpClient = WebApiClusterMessageBusTestHelpers.CreateHttpClientSubstitute(HttpStatusCode.OK, entries.ToNJson());
