@@ -25,6 +25,8 @@
         <PackageReference Include="Apache.NMS"/>
         <PackageReference Include="Apache.NMS.ActiveMQ"/>
         <PackageReference Include="StackExchange.Redis"/>
+        <PackageReference Include="AWSSDK.SQS"/>
+        <PackageReference Include="AWSSDK.SimpleNotificationService"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
@@ -46,5 +48,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.WebApi\ThunderPropagator.ClusterMessageBuses.WebApi.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.TcpSocket\ThunderPropagator.ClusterMessageBuses.TcpSocket.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.UdpClient\ThunderPropagator.ClusterMessageBuses.UdpClient.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AwsSqs\ThunderPropagator.ClusterMessageBuses.AwsSqs.csproj" />
     </ItemGroup>
 </Project>

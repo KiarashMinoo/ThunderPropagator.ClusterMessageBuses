@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using NetArchTest.Rules;
 using ThunderPropagator.ClusterMessageBuses.ActiveMQ;
+using ThunderPropagator.ClusterMessageBuses.AwsSqs;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
 using ThunderPropagator.ClusterMessageBuses.Mqtt;
 using ThunderPropagator.ClusterMessageBuses.NATS;
@@ -22,11 +23,11 @@ namespace ThunderPropagator.ArchTests;
 /// containment per assembly, no sibling-transport cross-dependencies, and an acyclic dependency
 /// graph across the whole repo.
 ///
-/// Kafka, RabbitMQ, NATS, Pulsar, MQTT, ActiveMQ, RedisPubSub, WebSocket, WebApi, TcpSocket, and
-/// UdpClient are the first eleven transport projects (the rest of the roadmap in CLAUDE.md, plus
-/// gRPC #2 and ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" /> and
-/// <see cref="ForbiddenDependencies" /> are written so adding another transport later is just a new
-/// TheoryData row, not a new test method.
+/// Kafka, RabbitMQ, NATS, Pulsar, MQTT, ActiveMQ, RedisPubSub, WebSocket, WebApi, TcpSocket,
+/// UdpClient, and AwsSqs are the first twelve transport projects (the rest of the roadmap in
+/// CLAUDE.md, plus gRPC #2 and ZeroMQ #3, are still to come). <see cref="ClusterMessageBusAssemblies" />
+/// and <see cref="ForbiddenDependencies" /> are written so adding another transport later is just a
+/// new TheoryData row, not a new test method.
 /// </summary>
 public class ClusterMessageBusArchitectureTests
 {
@@ -42,6 +43,7 @@ public class ClusterMessageBusArchitectureTests
     private const string WebApiNamespace = "ThunderPropagator.ClusterMessageBuses.WebApi";
     private const string TcpSocketNamespace = "ThunderPropagator.ClusterMessageBuses.TcpSocket";
     private const string UdpClientNamespace = "ThunderPropagator.ClusterMessageBuses.UdpClient";
+    private const string AwsSqsNamespace = "ThunderPropagator.ClusterMessageBuses.AwsSqs";
 
     public static TheoryData<Assembly, string> ClusterMessageBusAssemblies => new()
     {
@@ -57,6 +59,7 @@ public class ClusterMessageBusArchitectureTests
         { typeof(WebApiClusterMessageBusExtensions).Assembly, WebApiNamespace },
         { typeof(TcpClusterMessageBusExtensions).Assembly, TcpSocketNamespace },
         { typeof(UdpClusterMessageBusExtensions).Assembly, UdpClientNamespace },
+        { typeof(AwsSqsClusterMessageBusExtensions).Assembly, AwsSqsNamespace },
     };
 
     [Theory]
@@ -87,17 +90,18 @@ public class ClusterMessageBusArchitectureTests
     // forbids every *other* transport's namespace.
     public static TheoryData<Assembly, string[]> ForbiddenDependencies => new()
     {
-        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(PulsarClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(MqttClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(ActiveMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(RedisPubSubClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(WebSocketClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(WebApiClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, TcpSocketNamespace, UdpClientNamespace] },
-        { typeof(TcpClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, UdpClientNamespace] },
-        { typeof(UdpClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace] },
+        { typeof(KafkaClusterMessageBusExtensions).Assembly, [RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(RabbitMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(NatsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(PulsarClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(MqttClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(ActiveMqClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(RedisPubSubClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(WebSocketClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(WebApiClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, TcpSocketNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(TcpClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, UdpClientNamespace, AwsSqsNamespace] },
+        { typeof(UdpClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, AwsSqsNamespace] },
+        { typeof(AwsSqsClusterMessageBusExtensions).Assembly, [KafkaNamespace, RabbitMqNamespace, NatsNamespace, PulsarNamespace, MqttNamespace, ActiveMqNamespace, RedisPubSubNamespace, WebSocketNamespace, WebApiNamespace, TcpSocketNamespace, UdpClientNamespace] },
     };
 
     [Theory]

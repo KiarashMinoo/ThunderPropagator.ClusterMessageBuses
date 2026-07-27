@@ -64,6 +64,13 @@
   <ItemGroup Label="RedisPubSub">
     <PackageVersion Include="StackExchange.Redis" Version="3.0.17" />
   </ItemGroup>
+  <ItemGroup Label="AwsSqs">
+    <!-- Same versions already pinned by ThunderPropagator.Feeviders' AwsSqs projects, for
+         consistency across the org. AWS SDK v4 packages target net8.0+ only, which matches this
+         repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
+    <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.5" />
+    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.5" />
+  </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="7.2.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
