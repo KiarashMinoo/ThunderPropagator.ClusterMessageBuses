@@ -1,32 +1,26 @@
 <Project>
-
   <!-- ═══════════════════════════════════════════════════════════════════════
        Entry point
        ───────────────────────────────────────────────────────────────────────
        This file only wires in the shared-props bootstrap (its own file, see
        header there) before declaring this repo's own overrides below.
        ═══════════════════════════════════════════════════════════════════════ -->
-
   <!-- Shared-props bootstrapping: downloads ThunderPropagator.SharedBuild config into
        .shared-props/ and imports it — see SharedProps.props. -->
-  <Import Project="$(MSBuildThisFileDirectory)SharedProps.props"/>
-
+  <Import Project="$(MSBuildThisFileDirectory)SharedProps.props" />
   <!-- ═══════════════════════════════════════════════════════════════════════
        Repo-specific overrides
        ───────────────────────────────────────────────────────────────────────
        Declared after the shared-props import above so these values always
        win over whatever Shared.Build.props sets as its own defaults.
        ═══════════════════════════════════════════════════════════════════════ -->
-
   <!-- Target frameworks and repo metadata. -->
   <PropertyGroup Label="RepoIdentity">
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <RepositoryUrl>https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses</RepositoryUrl>
   </PropertyGroup>
-
   <!-- Version is bumped by CI per branch — never hand-edit this. -->
   <PropertyGroup Label="Versioning">
-    <Version>0.1.0-beta.1</Version>
+    <Version>0.1.0-beta.2</Version>
   </PropertyGroup>
-
 </Project>
