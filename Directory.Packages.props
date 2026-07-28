@@ -63,6 +63,13 @@
     <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.2" />
   </ItemGroup>
+  <ItemGroup Label="GcpPubSub">
+    <!-- PublisherServiceApiClient/SubscriberServiceApiClient are GAPIC-generated with a protected
+         parameterless constructor and virtual members specifically for direct test substitution
+         (Google's documented pattern) -- no custom wrapper interface needed, same reasoning as
+         AWSSDK.SQS/AWSSDK.SimpleNotificationService above. -->
+    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.36.0" />
+  </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="8.10.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
