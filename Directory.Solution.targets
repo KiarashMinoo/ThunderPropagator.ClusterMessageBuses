@@ -1,0 +1,52 @@
+<Project>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Solution-level dependency check (runs exactly once per solution restore)
+       ───────────────────────────────────────────────────────────────────────
+       Imported automatically at the end of a command-line solution build/restore
+       against this repo's own .sln/.slnx (MSBuild 17.14+) — see
+       https://learn.microsoft.com/visualstudio/msbuild/customize-solution-build.
+       This is separate from, and does NOT affect, individual project builds (e.g.
+       an IDE building one project directly) — those go through each project's own
+       Directory.Build.props → SharedProps.props chain instead, which is why
+       SkipPerProjectDependencyCheck is set to true there rather than deleting that
+       target: without a solution-level build, this file is never imported at all,
+       and the per-project check is the only one left to fall back on.
+
+       The script itself is already downloaded to .github/scripts/ upfront by
+       SharedProps.props's own shared-file list, so this only needs to run it —
+       no download logic duplicated here. If it isn't there yet (e.g. the very
+       first restore on a fresh checkout, before that download target has run),
+       both targets below simply no-op or, in the second target's case, explain
+       why; the check starts working from the next restore onward once the
+       script has landed on disk.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup Label="SolutionDependencyCheck">
+    <_SolutionDependencyCheckScriptPath>$(MSBuildThisFileDirectory).github/scripts/Update-ThunderPropagatorDependencies.ps1</_SolutionDependencyCheckScriptPath>
+  </PropertyGroup>
+
+  <!-- Skipped entirely in CI ($(GITHUB_ACTIONS) == 'true'): CI pins/bumps dependency versions
+       through its own release workflow, so a build-time auto-apply here would fight that and
+       make CI runs non-reproducible. Locally, this actually mutates Directory.Packages.props
+       (no -Check flag) so a dev's next build already reflects the latest family package
+       versions instead of just reporting them. -->
+  <Target Name="RunDependencyUpdaterOnceForSolution" AfterTargets="Restore" Condition="Exists('$(_SolutionDependencyCheckScriptPath)') and '$(GITHUB_ACTIONS)' != 'true'">
+    <Message Importance="normal" Text="[SharedProps] (solution-level, once) Checking ThunderPropagator dependency versions via $(_SolutionDependencyCheckScriptPath) ..."/>
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(_SolutionDependencyCheckScriptPath)&quot;"
+          ContinueOnError="WarnAndContinue"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_SolutionDependencyCheckExitCode"/>
+    </Exec>
+    <Message Importance="normal" Text="[SharedProps] Dependency version check completed; all family packages are up to date or the report above lists what's outdated." Condition="'$(_SolutionDependencyCheckExitCode)' == '0'"/>
+    <Message Importance="high" Text="[SharedProps] Dependency version check exited with code $(_SolutionDependencyCheckExitCode); see the output above for details." Condition="'$(_SolutionDependencyCheckExitCode)' != '' and '$(_SolutionDependencyCheckExitCode)' != '0'"/>
+  </Target>
+
+  <!-- Explains its own silence: without this, a solution restore on a fresh checkout prints
+       nothing about the dependency check at all, which reads as "it isn't wired up" rather than
+       "it hasn't downloaded yet". -->
+  <Target Name="LogSolutionDependencyCheckPending" AfterTargets="Restore" Condition="!Exists('$(_SolutionDependencyCheckScriptPath)') and '$(GITHUB_ACTIONS)' != 'true'">
+    <Message Importance="normal" Text="[SharedProps] (solution-level) Update-ThunderPropagatorDependencies.ps1 isn't on disk yet at $(_SolutionDependencyCheckScriptPath) — the dependency-version check will start running from the next restore onward."/>
+  </Target>
+
+</Project>

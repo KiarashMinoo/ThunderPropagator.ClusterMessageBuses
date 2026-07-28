@@ -1,120 +1,32 @@
 <Project>
-  <!--
-    ═══════════════════════════════════════════════════════════════════════════
-    Shared build infrastructure for ThunderPropagator.ClusterMessageBuses
-    ───────────────────────────────────────────────────────────────────────────
-    Shared.Build.props  — SDK-wide build settings (TFM, language, quality flags)
-    Shared.Nuget.props  — NuGet package metadata and icon download
-    ───────────────────────────────────────────────────────────────────────────
-    Lifecycle:
-      dotnet restore  →  DownloadSharedProps fetches missing files (3 retries)
-      dotnet build    →  DownloadSharedProps runs again if files still absent,
-                         then ValidateSharedProps errors if they are still missing
-      dotnet clean    →  CleanSharedProps removes the entire .shared-props\ folder
-    ═══════════════════════════════════════════════════════════════════════════
-  -->
-  <PropertyGroup Label="SharedProps">
-    <!-- Forward slash works on both Windows and Linux; backslash is a literal char on Linux -->
-    <SharedPropsDirectory>$(MSBuildThisFileDirectory).shared-props/</SharedPropsDirectory>
-    <SharedBuildBaseUrl>https://raw.githubusercontent.com/KiarashMinoo/ThunderPropagator.SharedBuild/main</SharedBuildBaseUrl>
-    <SharedBuildPropsFile>$(SharedPropsDirectory)Shared.Build.props</SharedBuildPropsFile>
-    <SharedNugetPropsFile>$(SharedPropsDirectory)Shared.Nuget.props</SharedNugetPropsFile>
-    <!-- Cross-platform wait command: 'sleep 3' on Unix, 'timeout /t 3 /nobreak >nul' on Windows.
-         System.Threading.Thread.Sleep is blocked on GitHub Actions (MSB4185). -->
-    <_WaitCommand Condition="'$(OS)' != 'Windows_NT'">sleep 3</_WaitCommand>
-    <_WaitCommand Condition="'$(OS)' == 'Windows_NT'">timeout /t 3 /nobreak &gt;nul</_WaitCommand>
-  </PropertyGroup>
-  <!-- Import shared props when present on disk. Downloaded automatically on restore/build. -->
-  <Import Project="$(SharedBuildPropsFile)" Condition="Exists('$(SharedBuildPropsFile)')" />
-  <Import Project="$(SharedNugetPropsFile)" Condition="Exists('$(SharedNugetPropsFile)')" />
-  <!-- ── Repo-specific overrides ──────────────────────────────────────────── -->
-  <PropertyGroup Label="Versioning">
-    <Version>0.1.0-beta.1</Version>
-  </PropertyGroup>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Entry point
+       ───────────────────────────────────────────────────────────────────────
+       This file only wires in the shared-props bootstrap (its own file, see
+       header there) before declaring this repo's own overrides below.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Shared-props bootstrapping: downloads ThunderPropagator.SharedBuild config into
+       .shared-props/ and imports it — see SharedProps.props. -->
+  <Import Project="$(MSBuildThisFileDirectory)SharedProps.props"/>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Repo-specific overrides
+       ───────────────────────────────────────────────────────────────────────
+       Declared after the shared-props import above so these values always
+       win over whatever Shared.Build.props sets as its own defaults.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Target frameworks and repo metadata. -->
   <PropertyGroup Label="RepoIdentity">
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <RepositoryUrl>https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses</RepositoryUrl>
   </PropertyGroup>
-  <ItemGroup Label="PackageAssets">
-    <!-- Every project in this repo gets both Cluster-flavored core packages: IClusterMessageBus,
-         AbstractClusterMessageBus, ClusterFanOutMessage, ClusterSubscriptionEvent, etc. live in
-         ThunderPropagator.Application.Cluster; ChannelManager, IClusterNodeDiscovery, and the
-         IFeature/AddFeature<T>() plumbing AddFeature<T>() below needs live in ThunderPropagator.Cluster
-         (Infrastructure). Both shipped for the first time as of core issue #340/#346. -->
-    <PackageReference Include="$(ThunderPropagatorPackageId)" />
-    <PackageReference Include="$(ThunderPropagatorApplicationPackageId)" />
-    <!-- PackagePath="README.md" ensures consistent naming inside the package on case-sensitive Linux -->
-    <None Include="$(MSBuildThisFileDirectory)ReadMe.md" Pack="true" PackagePath="README.md" />
-  </ItemGroup>
-  <!-- ── Targets ───────────────────────────────────────────────────────────── -->
-  <!--
-    DownloadSharedProps
-    ───────────────────
-    Downloads Shared.Build.props and Shared.Nuget.props from ThunderPropagator.SharedBuild
-    with up to 3 attempts and a 3-second pause between each.
 
-    The _SharedFile ItemGroup drives task batching: a single DownloadFile declaration
-    is evaluated once per item, so adding more shared files only requires a new item entry.
+  <!-- Version is bumped by CI per branch — never hand-edit this. -->
+  <PropertyGroup Label="Versioning">
+    <Version>0.1.0-beta.1</Version>
+  </PropertyGroup>
 
-    MSBuild note: item metadata (%()) can be used in task attributes and task Conditions
-    (triggers task batching) but NOT in <PropertyGroup Condition="...">. The wait
-    conditions therefore use named property paths — one per known file — which is valid.
-
-    Triggers:
-      BeforeTargets="_GenerateRestoreProjectPathWalk"  → early in dotnet restore
-      BeforeTargets="Restore"                          → standard restore entry point
-      BeforeTargets="Build"                            → before any compilation
-  -->
-  <Target Name="DownloadSharedProps" BeforeTargets="_GenerateRestoreProjectPathWalk;Restore;Build">
-    <MakeDir Directories="$(SharedPropsDirectory)" Condition="!Exists('$(SharedPropsDirectory)')" />
-    <ItemGroup>
-      <_SharedFile Include="Shared.Build.props">
-        <Dest>$(SharedBuildPropsFile)</Dest>
-      </_SharedFile>
-      <_SharedFile Include="Shared.Nuget.props">
-        <Dest>$(SharedNugetPropsFile)</Dest>
-      </_SharedFile>
-    </ItemGroup>
-    <Message Importance="normal" Text="[SharedProps] Checking shared props in $(SharedPropsDirectory) …" />
-    <!-- ── Attempt 1 ────────────────────────────────────────────────────── -->
-    <!-- Task batching: DownloadFile runs once per _SharedFile item whose Dest is absent -->
-    <DownloadFile SourceUrl="$(SharedBuildBaseUrl)/%(_SharedFile.Identity)" DestinationFolder="$(SharedPropsDirectory)" DestinationFileName="%(_SharedFile.Identity)" Condition="!Exists('%(_SharedFile.Dest)')" ContinueOnError="WarnAndContinue" />
-    <Message Importance="normal" Text="[SharedProps] ✓ %(_SharedFile.Identity) ready." Condition="Exists('%(_SharedFile.Dest)')" />
-    <!-- ── Attempt 2 (wait 3 s if any file still missing) ───────────────── -->
-    <!-- PropertyGroup Condition uses named properties — metadata not allowed here -->
-    <Exec Command="$(_WaitCommand)" Condition="!Exists('$(SharedBuildPropsFile)') Or !Exists('$(SharedNugetPropsFile)')" StandardOutputImportance="low" />
-    <Message Importance="normal" Text="[SharedProps] Attempt 1 failed for %(_SharedFile.Identity) — retrying (attempt 2) …" Condition="!Exists('%(_SharedFile.Dest)')" />
-    <DownloadFile SourceUrl="$(SharedBuildBaseUrl)/%(_SharedFile.Identity)" DestinationFolder="$(SharedPropsDirectory)" DestinationFileName="%(_SharedFile.Identity)" Condition="!Exists('%(_SharedFile.Dest)')" ContinueOnError="WarnAndContinue" />
-    <!-- ── Attempt 3 (wait 3 s if any file still missing) ───────────────── -->
-    <Exec Command="$(_WaitCommand)" Condition="!Exists('$(SharedBuildPropsFile)') Or !Exists('$(SharedNugetPropsFile)')" StandardOutputImportance="low" />
-    <Message Importance="normal" Text="[SharedProps] Attempt 2 failed for %(_SharedFile.Identity) — retrying (attempt 3, final) …" Condition="!Exists('%(_SharedFile.Dest)')" />
-    <DownloadFile SourceUrl="$(SharedBuildBaseUrl)/%(_SharedFile.Identity)" DestinationFolder="$(SharedPropsDirectory)" DestinationFileName="%(_SharedFile.Identity)" Condition="!Exists('%(_SharedFile.Dest)')" ContinueOnError="WarnAndContinue" />
-    <!-- ── Result ───────────────────────────────────────────────────────── -->
-    <!-- Per-file warning when all 3 attempts failed; ValidateSharedProps turns this into an error -->
-    <Warning Condition="!Exists('%(_SharedFile.Dest)')" Text="[SharedProps] ✗ All 3 download attempts failed for %(_SharedFile.Identity). Check network connectivity." />
-    <Message Importance="normal" Text="[SharedProps] All shared props are present." Condition="Exists('$(SharedBuildPropsFile)') And Exists('$(SharedNugetPropsFile)')" />
-  </Target>
-  <!--
-    ValidateSharedProps
-    ───────────────────
-    Guard that runs before any compilation. DependsOnTargets ensures DownloadSharedProps
-    is always attempted first. If the required files are still absent after all retries
-    the build fails immediately with a clear, actionable message rather than cascading
-    into hundreds of CS0246 type-not-found errors.
-  -->
-  <Target Name="ValidateSharedProps" DependsOnTargets="DownloadSharedProps" BeforeTargets="CoreCompile;Build">
-    <Error Condition="!Exists('$(SharedBuildPropsFile)')" Text="[SharedProps] ✗ Shared.Build.props is missing and could not be downloaded. Check network connectivity and run 'dotnet restore' again." />
-    <Error Condition="!Exists('$(SharedNugetPropsFile)')" Text="[SharedProps] ✗ Shared.Nuget.props is missing and could not be downloaded. Check network connectivity and run 'dotnet restore' again." />
-  </Target>
-  <!--
-    CleanSharedProps
-    ────────────────
-    Runs automatically after dotnet clean. Removes the entire .shared-props\ folder
-    so the next dotnet restore fetches fresh copies from ThunderPropagator.SharedBuild.
-  -->
-  <Target Name="CleanSharedProps" AfterTargets="Clean">
-    <Message Importance="high" Text="[SharedProps] Removing $(SharedPropsDirectory) …" Condition="Exists('$(SharedPropsDirectory)')" />
-    <RemoveDir Directories="$(SharedPropsDirectory)" Condition="Exists('$(SharedPropsDirectory)')" />
-    <Message Importance="high" Text="[SharedProps] Clean complete. Run 'dotnet restore' to re-download shared props." Condition="!Exists('$(SharedPropsDirectory)')" />
-  </Target>
 </Project>

@@ -43,7 +43,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ActiveMQ
     /// One shared session/producer pair (<see cref="_publishSession"/>/<see cref="_publishProducer"/>)
     /// is reused for every publish this transport performs, serialized behind
     /// <see cref="_publishLock"/> — a single JMS session is not safe for concurrent use by more than
-    /// one thread. Each <see cref="SubscribeAsync(Guid, Func{ThunderPropagator.Application.Channels.Cluster.ClusterFanOutMessage,CancellationToken,Task},CancellationToken)"/>
+    /// one thread. Each <see cref="SubscribeAsync(Guid, Func{ClusterFanOutMessage,CancellationToken,Task},CancellationToken)"/>
     /// call, and the request/reply listeners started during initialization, each get their own
     /// dedicated session instead.
     /// </para>

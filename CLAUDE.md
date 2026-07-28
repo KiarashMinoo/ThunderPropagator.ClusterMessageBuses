@@ -1,174 +1,64 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for working in this repository.
 
 ## What this repo is
 
-`ThunderPropagator.ClusterMessageBuses` provides pluggable **cluster inter-node transport**
-implementations for [ThunderPropagator](https://github.com/KiarashMinoo/ThunderPropagator) — i.e.
-implementations of `IClusterMessageBus` (contract defined in core `ThunderPropagator.Application`,
-see core issue [#340](https://github.com/KiarashMinoo/ThunderPropagator/issues/340)) that a
-consuming application registers via dependency injection to replace or supplement core's built-in
-HttpClient-based cluster transport.
+Pluggable cluster inter-node transport implementations of the core cluster-message-bus contract — registered via DI to replace or supplement the host application's built-in cluster transport. Each transport implements the same seven operations: two fan-out publish/subscribe pairs (broadcast messages, subscription-sync events) and three leader/peer-pull operations (restore a snapshot from a leader, sync a delta since a timestamp, fetch a peer's local subscriptions).
 
-This repo is intentionally structured like
-[ThunderPropagator.Feeviders](https://github.com/KiarashMinoo/ThunderPropagator.Feeviders): a
-shared kernel plus one project per transport. The difference is what each transport project
-implements — Feeviders projects implement `IFeeder<TChannel>` / `IProvider<T>` (data-plane
-consume/publish against external messaging systems), while this repo's projects implement
-`IClusterMessageBus` (cluster control/data-plane: fan-out push to peer nodes, subscription
-replication across peers, node discovery).
+This repo contains no channels, feeders, or data-plane providers — only cluster control/data-plane transport.
 
-This repo does **not** contain channels, feeders, or data-plane providers — those live in core
-`ThunderPropagator`, `ThunderPropagator.Channels`, and `ThunderPropagator.Feeviders`.
-
-## Build & Test Commands
+## Commands
 
 ```bash
-# Restore (also downloads shared build props from ThunderPropagator.SharedBuild)
-dotnet restore
-
-# Build all projects
+dotnet restore    # fetches shared build configuration on first use; also needs read access to the core package feed
 dotnet build
-
-# Run all tests
 dotnet test
-
-# Run a specific test project
-dotnet test Tests/ThunderPropagator.UnitTests/
-dotnet test Tests/ThunderPropagator.ArchTests/
-
-# Run a single test by name
-dotnet test Tests/ThunderPropagator.UnitTests/ --filter "FullyQualifiedName~<TestMethodName>"
-
-# Clean (removes .shared-props/ folder — next restore re-downloads them)
-dotnet clean
+dotnet test <TestProject> --filter "FullyQualifiedName~<Name>"
+dotnet clean      # also clears the downloaded shared build cache
 ```
-
-**Important:** The first `dotnet restore` or `dotnet build` downloads `Shared.Build.props` and
-`Shared.Nuget.props` from the `ThunderPropagator.SharedBuild` GitHub repo into `.shared-props/`. If
-the build fails with `CS0246` type-not-found errors, re-run `dotnet restore` (network issue during
-download). Restoring also requires read access to the `KiarashMinoo` GitHub Packages feed for the
-`ThunderPropagator` and `ThunderPropagator.BuildingBlocks` package dependencies (`GH_TOKEN`).
-
-## Current State (scaffolding only)
-
-As of issue [#1](https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses/issues/1),
-this repo contains only:
-
-```
-src/
-└── ThunderPropagator.ClusterMessageBuses.SharedKernel/   # shared helpers, no transports yet
-
-Tests/
-├── ThunderPropagator.ArchTests/     # NetArchTest.Rules; namespace/dependency-direction enforcement
-└── ThunderPropagator.UnitTests/     # xUnit + NSubstitute + FluentAssertions
-```
-
-No `IClusterMessageBus` implementation exists yet — `SharedKernel` only has the cross-transport
-helpers every future implementation will build on. **Do not add a hard compile-time dependency on
-`IClusterMessageBus` itself** until core issue #340 ships and this repo's `ThunderPropagatorVersion`
-pin (`Directory.Packages.props`) is bumped to a version that publishes it; `SharedKernel`'s
-`AddFeature<T>()` wrapper only needs `IFeature`, which already exists in the currently pinned
-version.
-
-### Roadmap
-
-One `IClusterMessageBus` implementation project per transport is planned, mirroring the systems
-already covered in Feeviders, plus two protocols Feeviders itself only just gained:
-
-- gRPC — tracked by issue [#2](https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses/issues/2)
-- ZeroMQ — tracked by issue [#3](https://github.com/KiarashMinoo/ThunderPropagator.ClusterMessageBuses/issues/3)
-- Kafka, RabbitMQ, NATS, Pulsar, MQTT, ActiveMQ, RedisPubSub, WebSocket, WebApi, TcpSocket,
-  UdpClient, AwsSqs, AzureServiceBus, GcpPubSub — to be filed incrementally as follow-up tickets
-
-Each transport, once added, follows this layout (adapt names per transport):
-
-| File/Project | Base Type | Visibility |
-|---|---|---|
-| `ThunderPropagator.ClusterMessageBuses.{Transport}/{Transport}ClusterMessageBus.cs` | implements `IClusterMessageBus` | internal sealed (non-sealed in DEBUG) |
-| `ThunderPropagator.ClusterMessageBuses.{Transport}/{Transport}ClusterMessageBusOptions.cs` | plain options class | public |
-| `ThunderPropagator.ClusterMessageBuses.{Transport}/{Transport}ClusterMessageBusExtensions.cs` | static DI registration (`AddCluster{Transport}MessageBus()`) | public static |
 
 ## Architecture
 
-### SharedKernel (`src/ThunderPropagator.ClusterMessageBuses.SharedKernel/`)
+A shared-kernel area plus one project per transport, each independently deployable/versionable:
 
-- **`ThunderPropagatorExtensions.AddFeature<TFeature>()`** — thin wrapper delegating to core
-  `ThunderPropagator.Infrastructure.Extensions.ThunderPropagatorExtensions.AddFeature<TFeature>()`,
-  matching the pattern already used in `ThunderPropagator.RecoveryHandlers.SharedKernel`. Every
-  transport's DI extension should feature-gate itself through this rather than registering
-  unconditionally.
-- **`ClusterConnectionCache<TConnection>`** — generic keyed connection/client cache
-  (`ConcurrentDictionary<string, Lazy<Task<TConnection>>>` under the hood) for transports whose
-  underlying client is expensive to construct per peer (a gRPC `ChannelBase`, a ZeroMQ socket, a
-  broker client). Dedups concurrent construction for the same key, retries instead of permanently
-  caching a failed connect, and disposes every cached connection on container shutdown if
-  `TConnection` is `IAsyncDisposable`/`IDisposable`. Mirrors the pattern established by
-  `RedisConnectionMultiplexerCache` / `MongoClientCache` in `ThunderPropagator.RecoveryHandlers`,
-  generalized so every future transport project can reuse the same cache instead of reimplementing
-  it.
-- **`ClusterResiliencePipelineFactory`** — builds a `Polly.Core` `ResiliencePipeline` with a retry
-  (exponential backoff) plus circuit-breaker strategy, using `Polly.Core` directly rather than
-  `Microsoft.Extensions.Http.Resilience` / `Microsoft.Extensions.Http.Polly` — those are
-  HttpClient-specific and don't apply to gRPC streams, ZeroMQ sockets, or broker connections.
-  Transport projects should build their per-peer resilience pipeline through this factory instead
-  of hand-rolling retry loops, so behavior (and its unit test coverage) stays consistent across
-  transports.
+- **Shared kernel** — a feature-gate DI helper, a generic keyed connection/client cache for transports whose client is expensive to construct per peer (dedups concurrent connects, retries instead of caching a failure, disposes everything on shutdown), and a resilience-pipeline factory (retry + circuit-breaker) transports should build their per-peer resilience through instead of hand-rolling retry loops.
+- **Transport project** — implements the bus contract; a per-transport options class; a DI extension registering it, feature-gated through the shared helper.
 
-### Architecture Rules (Enforced by ArchTests)
+## The two request/reply shapes
 
-- Each transport assembly (once added) must keep all its public/internal types within its own
-  namespace.
-- No transport assembly may reference a sibling transport's namespace — transports must remain
-  independently deployable/versionable, same rule as `ThunderPropagator.RecoveryHandlers` and
-  `ThunderPropagator.Feeviders`.
-- The full assembly reference graph (SharedKernel + every transport) must be acyclic.
+The three leader/peer-pull operations need point-to-point delivery, which not every broker primitive offers directly:
 
-`Tests/ThunderPropagator.ArchTests/ClusterMessageBusArchitectureTests.cs` currently only checks
-`SharedKernel`'s own namespace containment (there's nothing else to check yet) but is structured so
-each new transport project just adds a row to the existing `TheoryData` sets rather than requiring
-new test methods.
+- **Brokers with a queue primitive** — every node owns a request queue and a reply queue named from its own node identity; a peer sends directly to the target's request queue and awaits a reply on its own reply queue. The answering side always derives the reply destination itself from the request envelope's own-identity field — never trusts a destination supplied on the wire, so a request can never redirect a reply to an arbitrary destination.
+- **Brokers with only topics/subscriptions (no queue primitive)** — every node instead owns a request topic and a reply topic, each with exactly one subscription (its own) pulling from it; a topic with a single subscription behaves like a point-to-point queue as long as no second subscription is ever added. Same non-trusting-the-wire rule applies to the reply destination.
 
-### Code Conventions
+Fan-out and subscription-sync always use one topic (or equivalent broadcast primitive) per channel, with every node's own exclusive consumer on it — regardless of which request/reply shape that transport uses.
 
-- `internal sealed` (non-sealed in `DEBUG` via `#if !DEBUG sealed #endif`) for concrete transport
-  classes, matching the pattern used across every `ThunderPropagator.*` repo.
-- `[LoggerMessage]` source-generated partial methods for all logging — never
-  `Logger.LogError(exception, someRuntimeString)`.
-- All culture-sensitive parsing/formatting (numeric types, `DateTime`) must use
-  `CultureInfo.InvariantCulture` explicitly.
-- `Guard.Against.Null(...)` / `Guard.Against.NullOrWhiteSpace(...)` (Ardalis.GuardClauses) for
-  required constructor parameters — never suppress with the `!` null-forgiving operator.
-- XML docs are required for all public APIs (`GenerateDocumentationFile=true`; build fails without
-  them).
+Transports whose underlying protocol has no built-in delivery guarantee (e.g. a connectionless one) must implement their own resend-on-timer reliability layer for the request side; every other transport can rely on the protocol's own guarantee.
 
-### Build Infrastructure
+## Architecture rules (enforced)
 
-`Directory.Build.props` is the single source of truth for versioning (`<Version>`) and target
-frameworks (`net8.0;net9.0;net10.0`). It downloads two shared property files at restore/build time:
+- Each transport assembly keeps its public/internal types inside its own namespace.
+- No transport assembly may reference a sibling transport's namespace.
+- The full assembly-reference graph (shared kernel plus every transport) must be acyclic.
 
-| File | Purpose |
-|---|---|
-| `.shared-props/Shared.Build.props` | SDK-wide settings: TFM, nullable, warnings-as-errors, etc. |
-| `.shared-props/Shared.Nuget.props` | NuGet metadata: authors, license, icon, package tags |
+## Conventions
 
-`Directory.Packages.props` manages all NuGet dependency versions centrally (CPM). Add new packages
-there; never specify `Version` on individual `<PackageReference>` items.
+- `internal sealed` (non-sealed in Debug via `#if !DEBUG sealed #endif`) for concrete transport classes.
+- Source-generated logging methods for all logging — never pass a runtime-built string to a logger call.
+- All culture-sensitive parsing/formatting must use the invariant culture explicitly.
+- Guard-clause library for required constructor parameters — never suppress with the null-forgiving operator.
+- XML docs required on all public API.
+- A single self-echo identifier stamped on every outbound fan-out/subscription-sync message lets a node reject messages that are its own broadcast looped back.
 
-### Versioning
+## Adding a transport
 
-The version is set in `Directory.Build.props` under `<Version>`. This repo has not published a
-NuGet package yet — the CI pipeline will begin managing beta/release version bumps automatically
-once publishing is switched on (see `.github/workflows/ci.yml`).
+New transport area → wire envelope types (request kind enum, request envelope with a reply-destination field, response envelope, delta-payload type) → resource-naming helper for whatever topic/queue/subscription names the broker needs → the bus class plus one partial file per concern (fan-out, subscription-sync, request/reply, snapshot restore/delta, subscription fetch) → a DI extension → a full unit-test suite substituting the broker client directly if it's designed for mocking (non-sealed, virtual members, a protected parameterless constructor), or behind a narrow custom interface if it isn't → an architecture-test row for the new transport's namespace isolation.
 
-### Solution File
+## Testing
 
-The solution uses the `.slnx` format (`ThunderPropagator.ClusterMessageBuses.slnx`) required by
-JetBrains Rider, matching every other repo in the ThunderPropagator family.
+xUnit, NSubstitute, FluentAssertions. A separate architecture-test project checks namespace containment, sibling-transport isolation, and the acyclic dependency graph — it's structured so a new transport just adds a data row, not a new test method. Both test projects have internal access to the shared kernel and every transport assembly.
 
-### Testing
+## Build & versioning
 
-- `ThunderPropagator.UnitTests` — xUnit, NSubstitute, FluentAssertions; targets `net10.0` only.
-- `ThunderPropagator.ArchTests` — NetArchTest.Rules; namespace containment and acyclic dependency
-  graph checks, extensible per transport.
+Version and target frameworks are centralized; CI bumps automatically. Restore fetches shared build configuration into a local, gitignored cache — a clean removes it, the next restore refetches it.

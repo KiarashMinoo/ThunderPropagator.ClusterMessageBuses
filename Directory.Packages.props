@@ -4,23 +4,11 @@
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <PropertyGroup Label="ThunderPropagatorPackages">
-    <BuildingBlocksVersion>1.0.1-beta.114</BuildingBlocksVersion>
-    <BuildingBlocksPackageId>ThunderPropagator.BuildingBlocks$(PackageIdConfigurationSuffix)$(PackageIdPlatformSuffix)</BuildingBlocksPackageId>
-    <!-- IClusterMessageBus / AbstractClusterMessageBus (core issue #340, #346) only ship in the
-         "Cluster"-flavored core packages (core's own Cluster build configuration, published
-         alongside its regular Debug/Release ones — see core Directory.Build.props /
-         .github/workflows/ci.yml). That ".Cluster" suffix is a fixed, separate package id, not
-         core's PackageIdConfigurationSuffix/PackageIdPlatformSuffix (those describe THIS repo's own
-         Debug/Release/AnyCPU/x64 packaging, unrelated to which flavor of the upstream core packages
-         we depend on) — so it's hardcoded here rather than reusing those MSBuild properties. -->
-    <ThunderPropagatorVersion>1.0.1-beta.195</ThunderPropagatorVersion>
+    <ThunderPropagatorVersion>1.0.1-beta.205</ThunderPropagatorVersion>
     <ThunderPropagatorPackageId>ThunderPropagator.Cluster$(PackageIdPlatformSuffix)</ThunderPropagatorPackageId>
-    <ThunderPropagatorApplicationPackageId>ThunderPropagator.Application.Cluster$(PackageIdPlatformSuffix)</ThunderPropagatorApplicationPackageId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="$(BuildingBlocksPackageId)" Version="$(BuildingBlocksVersion)" />
     <PackageVersion Include="$(ThunderPropagatorPackageId)" Version="$(ThunderPropagatorVersion)" />
-    <PackageVersion Include="$(ThunderPropagatorApplicationPackageId)" Version="$(ThunderPropagatorVersion)" />
   </ItemGroup>
   <ItemGroup Label="Resilience">
     <!-- Transport-agnostic retry/circuit-breaker building block for SharedKernel's

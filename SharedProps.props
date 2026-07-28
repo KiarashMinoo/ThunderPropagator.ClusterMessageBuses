@@ -1,0 +1,188 @@
+<Project>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Shared props infrastructure
+       ───────────────────────────────────────────────────────────────────────
+       Bootstraps this repo's slice of ThunderPropagator.SharedBuild (build
+       defaults, NuGet packaging metadata, package-id properties, and the
+       optional dependency-updater wiring) by downloading it into
+       .shared-props/ and importing it below.
+
+       Lifecycle:
+         dotnet restore  →  DownloadSharedPropsInfrastructure fetches every
+                             missing file (3 retries, 2s apart), then imports
+                             $(SharedBuildPropsFile) once it's on disk.
+         dotnet build    →  Same download target runs again as a safety net;
+                             anything still missing degrades gracefully
+                             (see the Warning below) instead of failing hard.
+         dotnet clean    →  CleanSharedPropsInfrastructure deletes each
+                             downloaded file individually, so the next
+                             restore/build re-fetches everything from scratch.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- ── Configuration ──────────────────────────────────────────────────────
+       Where the shared config lives, and the single entry-point file consumers import. -->
+  <PropertyGroup Label="SharedPropsInfrastructure">
+    <SharedBuildBaseUrl>https://raw.githubusercontent.com/KiarashMinoo/ThunderPropagator.SharedBuild/main</SharedBuildBaseUrl>
+    <SharedPropsDirectory>$(MSBuildThisFileDirectory).shared-props/</SharedPropsDirectory>
+    <SharedBuildPropsFile>Shared.NugetBuild.props</SharedBuildPropsFile>
+    <ScriptsDirectory>$(MSBuildThisFileDirectory).github/scripts/</ScriptsDirectory>
+  </PropertyGroup>
+
+  <!-- ── Dependency-check opt-out ───────────────────────────────────────────
+       Opts out of Shared.DependencyUpdater.props's per-project dependency check (which would
+       otherwise run once per project in this solution). Directory.Solution.targets at the repo
+       root runs the equivalent check exactly once instead, at the true end of the whole
+       solution's restore — see the comment there. A separate PropertyGroup from the download
+       config above: this opts out of a target defined in the downloaded
+       Shared.DependencyUpdater.props, it isn't itself part of what/where gets downloaded. -->
+  <PropertyGroup Label="DependencyCheckOptOut">
+    <SkipPerProjectDependencyCheck>true</SkipPerProjectDependencyCheck>
+  </PropertyGroup>
+
+  <!-- ── Package README ─────────────────────────────────────────────────────
+       Shared.NugetReadme.props packs $(ThunderPropagatorReadmePath) into the NuGet package if
+       set; left unset it degrades to "don't pack a README" rather than failing (see that file's
+       own comment). $(MSBuildThisFileDirectory) here correctly means this repo's root (unlike
+       inside the downloaded Shared.Nuget*.props files, where it means .shared-props\ instead). -->
+  <PropertyGroup Label="PackageReadme">
+    <ThunderPropagatorReadmePath>$(MSBuildThisFileDirectory)README.md</ThunderPropagatorReadmePath>
+  </PropertyGroup>
+
+  <!-- ── Shared-file manifest ───────────────────────────────────────────────
+       $(SharedBuildPropsFile) (Shared.NugetBuild.props) is a router: it imports Shared.Build.props,
+       Shared.Nuget.props and Shared.PackageIds.props, and Shared.Nuget.props in turn imports
+       Shared.NugetIcon.props and Shared.NugetReadme.props. Each of those files only downloads its
+       own children from inside a Target that runs after IT has already been imported — so relying
+       on that cascade alone takes 3+ restore/build passes to fully converge (one pass per import
+       depth). Downloading the whole known chain here, upfront, in this repo's own single pass,
+       cuts that down to the 2 passes (restore, then build) documented in CLAUDE.md: the first
+       populates every file below; by the second, every Exists() guard in the chain is already
+       satisfied and nothing is missing to trigger a further nested download. -->
+  <ItemGroup Label="SharedPropsInfrastructure">
+    <_SharedFile Include="$(SharedBuildPropsFile)">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.Build.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.Nuget.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.PackageIds.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.NugetIcon.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.NugetReadme.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Shared.DependencyUpdater.props">
+      <DestPath>$(SharedPropsDirectory)</DestPath>
+    </_SharedFile>
+    <_SharedFile Include="Update-ThunderPropagatorDependencies.ps1">
+      <DestPath>$(ScriptsDirectory)</DestPath>
+    </_SharedFile>
+  </ItemGroup>
+
+  <!-- ── Clean ──────────────────────────────────────────────────────────────
+       Runs after `dotnet clean` so the next restore/build re-downloads everything above from
+       scratch. Deletes every $(_SharedFile) individually by its own %(DestPath) rather than
+       just wiping $(SharedPropsDirectory) wholesale: Update-ThunderPropagatorDependencies.ps1
+       lives under .github/scripts/ alongside other real, tracked files, so that directory can
+       never be RemoveDir'd outright — only this one file in it should go. -->
+  <Target Name="CleanSharedPropsInfrastructure" Label="SharedPropsInfrastructure" AfterTargets="Clean">
+    <!-- Both messages are evaluated (and thus placed) before Delete runs — Delete itself
+         changes what Exists() returns, so a message conditioned on it placed afterwards would
+         misreport its own result. -->
+    <Message Importance="normal" Text="[SharedProps] Removing %(_SharedFile.Identity) from %(_SharedFile.DestPath) …" Condition="Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')"/>
+    <Message Importance="normal" Text="[SharedProps] %(_SharedFile.Identity) not present at %(_SharedFile.DestPath) — nothing to clean." Condition="!Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')"/>
+    <Delete Files="%(_SharedFile.DestPath)%(_SharedFile.Identity)" Condition="Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')" ContinueOnError="WarnAndContinue"/>
+  </Target>
+
+  <!-- ── Download ───────────────────────────────────────────────────────────
+       Fires before Restore, Build, and the solution-level restore graph walk, so every file in
+       $(SharedPropsDirectory) exists on disk before anything below tries to import it. -->
+  <Target Name="DownloadSharedPropsInfrastructure" Label="SharedPropsInfrastructure" BeforeTargets="_GenerateRestoreProjectPathWalk;Restore;Build">
+    <MakeDir Directories="%(_SharedFile.DestPath)" Condition="!Exists('%(_SharedFile.DestPath)')"/>
+
+    <!-- Snapshot which files are already on disk before touching anything: the Move below
+         changes what Exists() returns for a file mid-target, so re-checking Exists() after the
+         fact (like the messages below used to) can't tell "was already there" apart from "was
+         just downloaded" — the same pitfall CleanSharedPropsInfrastructure works around above. -->
+    <ItemGroup>
+      <_SharedFile Condition="Exists('%(_SharedFile.DestPath)%(Identity)')">
+        <WasPresent>true</WasPresent>
+      </_SharedFile>
+    </ItemGroup>
+
+    <Message Importance="normal" Text="[SharedProps] %(_SharedFile.Identity) already cached — skipping download." Condition="'%(_SharedFile.WasPresent)' == 'true'"/>
+    <Message Importance="normal" Text="[SharedProps] Fetching %(_SharedFile.Identity) from $(SharedBuildBaseUrl)/%(_SharedFile.Identity) (up to 3 attempts, 2s apart) …" Condition="'%(_SharedFile.WasPresent)' != 'true'"/>
+    <!-- A solution build can restore/build several projects — and, for multi-targeted ones, several
+         per-TargetFramework inner builds — in parallel, and each triggers this same target
+         independently. Download to a temp file unique to this project+TFM first, then move it
+         into place, so a sibling project/build can never import a partially-written shared props
+         file. $(MSBuildProcessId) looked like it would give per-process uniqueness here, but it
+         resolves to empty during restore's evaluation, collapsing every concurrent download onto
+         the exact same "<file>..tmp" name and producing MSB3923 file-in-use errors; $(MSBuildProjectName)
+         and $(TargetFramework) are genuine, always-populated reserved properties, so this combination
+         actually is unique per caller.
+
+         Unlike a plain filesystem rename, MSBuild's Move task does NOT overwrite an existing
+         destination — it throws MSB3677 if one is already there. So this is first-writer-wins,
+         not last-writer-wins: only move our temp file into place if nobody else's is there yet;
+         if a sibling already won that race, just delete our now-redundant temp copy instead of
+         trying (and failing) to overwrite theirs. Either way every reader ends up seeing either
+         the old file or one complete copy of the new one, never a partial write.
+
+         The !Exists(dest) check and the actual move aren't one atomic step, though: two callers
+         can both see the destination missing and both attempt the move at nearly the same instant,
+         so one of them still loses a filesystem-level race and throws MSB3677. That failure is
+         harmless here — it only means a sibling's copy already won — so it's downgraded to a
+         warning instead of failing the build, and the cleanup below unconditionally removes
+         whatever temp file is left afterward, whether the move succeeded, lost the race, or never
+         ran because a sibling had already finished before we got here.
+
+         ContinueOnError="WarnAndContinue" on the download itself matters just as much: without
+         it, a network hiccup here would fail the whole restore/build outright instead of
+         degrading to the Warning below and letting a later restore/build pick the file up once
+         connectivity returns.
+
+         ?cb=<ticks> busts raw.githubusercontent.com's CDN cache: a shared props file just
+         pushed upstream can otherwise still serve a stale cached copy here for a few minutes
+         (bitten by this directly — a real NU5050 fix landed in Shared.NugetReadme.props and
+         was live on origin/main minutes before a CI run still hit the pre-fix behavior). Each
+         restore/build gets a fresh timestamp, forcing a real origin fetch every time. -->
+    <DownloadFile SourceUrl="$(SharedBuildBaseUrl)/%(_SharedFile.Identity)?cb=$([System.DateTime]::UtcNow.Ticks)"
+                  DestinationFolder="%(_SharedFile.DestPath)"
+                  DestinationFileName="%(_SharedFile.Identity).$(MSBuildProjectName)$(TargetFramework).tmp"
+                  Condition="'%(_SharedFile.WasPresent)' != 'true'"
+                  Retries="3"
+                  RetryDelayMilliseconds="2000"
+                  ContinueOnError="WarnAndContinue"/>
+    <Move SourceFiles="%(_SharedFile.DestPath)%(_SharedFile.Identity).$(MSBuildProjectName)$(TargetFramework).tmp"
+          DestinationFiles="%(_SharedFile.DestPath)%(_SharedFile.Identity)"
+          Condition="Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity).$(MSBuildProjectName)$(TargetFramework).tmp') and !Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')"
+          ContinueOnError="WarnAndContinue"/>
+    <Delete Files="%(_SharedFile.DestPath)%(_SharedFile.Identity).$(MSBuildProjectName)$(TargetFramework).tmp"
+            Condition="Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity).$(MSBuildProjectName)$(TargetFramework).tmp')"
+            ContinueOnError="WarnAndContinue"/>
+
+    <Message Importance="normal" Text="[SharedProps] ✓ %(_SharedFile.Identity) downloaded." Condition="'%(_SharedFile.WasPresent)' != 'true' and Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')"/>
+    <Warning Text="[SharedProps] ✗ %(_SharedFile.Identity) could not be downloaded after 3 attempts (check network access to raw.githubusercontent.com) — anything depending on it is skipped until a later restore/build succeeds." Condition="'%(_SharedFile.WasPresent)' != 'true' and !Exists('%(_SharedFile.DestPath)%(_SharedFile.Identity)')"/>
+  </Target>
+
+  <!-- ── Import ─────────────────────────────────────────────────────────────
+       The actual consumption step: import the shared config once it's on disk.
+       $(SharedBuildPropsFile)'s own router chain now also imports Shared.DependencyUpdater.props
+       (the file with the DownloadScript/RunDependencyUpdater targets that fetch and run
+       Update-ThunderPropagatorDependencies.ps1 as a report-only pre-restore check) — no separate
+       import needed here. It still needs to stay in the $(_SharedFile) list above, though: without
+       downloading it upfront alongside everything else, resolving it would take the router's own
+       extra download pass instead of converging in the same 2 passes as the rest of the chain. -->
+  <Import Label="SharedPropsInfrastructure"
+          Project="$(SharedPropsDirectory)$(SharedBuildPropsFile)"
+          Condition="Exists('$(SharedPropsDirectory)$(SharedBuildPropsFile)')"/>
+
+</Project>

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ThunderPropagator.Application;
+using ThunderPropagator.Application.Features;
 
 namespace ThunderPropagator.ClusterMessageBuses.SharedKernel
 {
