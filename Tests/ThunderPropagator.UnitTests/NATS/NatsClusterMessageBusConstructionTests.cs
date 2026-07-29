@@ -33,7 +33,7 @@ public class NatsClusterMessageBusConstructionTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, nodeEndpoint: nodeEndpoint);
 
         var expectedSubject = NatsSubjectNaming.RequestSubject("thunderpropagator.cluster", nodeEndpoint);
-        await transport.Received(1).SubscribeAsync(expectedSubject, Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(expectedSubject, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class NatsClusterMessageBusConstructionTests
         await bus.EnsureInitializedAsync(CancellationToken.None);
         await bus.EnsureInitializedAsync(CancellationToken.None);
 
-        await transport.Received(1).SubscribeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

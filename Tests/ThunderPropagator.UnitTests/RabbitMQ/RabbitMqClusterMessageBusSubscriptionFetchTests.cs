@@ -67,7 +67,7 @@ public class RabbitMqClusterMessageBusSubscriptionFetchTests
         var fetchTask = bus.FetchPeerSubscriptionsAsync(new Uri("https://peer:5001/"), Guid.NewGuid());
 
         var call = channels[0].ReceivedCalls()
-            .Last(c => c.GetMethodInfo().Name == nameof(RabbitMQ.Client.IChannel.BasicPublishAsync));
+            .Last(c => c.GetMethodInfo().Name == nameof(global::RabbitMQ.Client.IChannel.BasicPublishAsync));
         var publishedBody = (ReadOnlyMemory<byte>)call.GetArguments()[4]!;
         var sentRequest = System.Text.Encoding.UTF8.GetString(publishedBody.Span).FromNJson<RabbitMqClusterRequestEnvelope>()!;
 

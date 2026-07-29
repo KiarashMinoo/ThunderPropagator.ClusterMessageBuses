@@ -35,8 +35,12 @@ namespace ThunderPropagator.ClusterMessageBuses.SharedKernel
         /// <summary>
         /// Returns the shared connection for <paramref name="key" />, connecting it on first use.
         /// Concurrent callers for the same key are coalesced onto a single in-flight connect
-        /// operation. If a previous attempt for this key faulted or was cancelled, the failure is not
-        /// cached — this call retries instead of permanently returning the same failure.
+        /// operation. If the connect attempt for this key faults or is cancelled, the failure is not
+        /// cached — the entry is removed so the next call for the same key gets a fresh attempt
+        /// instead of permanently reusing the same failure. This call's own failure still propagates
+        /// to its caller (every caller is expected to handle it, e.g. a per-peer try/catch around a
+        /// fan-out publish) rather than retrying itself, since a persistently-failing connect with a
+        /// non-cancelling token would otherwise spin in a tight retry loop forever.
         /// </summary>
         /// <param name="key">Identifies the connection — typically a peer endpoint or connection string.</param>
         /// <param name="cancellationToken">
@@ -47,24 +51,18 @@ namespace ThunderPropagator.ClusterMessageBuses.SharedKernel
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-            while (true)
+            var lazy = _connections.GetOrAdd(key, k => new Lazy<Task<TConnection>>(() => _connect(k, cancellationToken)));
+
+            try
             {
-                var lazy = _connections.GetOrAdd(key, k => new Lazy<Task<TConnection>>(() => _connect(k, cancellationToken)));
-
-                try
-                {
-                    return await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch when (lazy.Value.IsFaulted || lazy.Value.IsCanceled)
-                {
-                    // Don't let a transient connect failure permanently poison the cache entry —
-                    // remove it (only if it's still the same faulted/cancelled Lazy) so the next
-                    // iteration retries.
-                    _connections.TryRemove(new KeyValuePair<string, Lazy<Task<TConnection>>>(key, lazy));
-
-                    if (cancellationToken.IsCancellationRequested)
-                        throw;
-                }
+                return await lazy.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch when (lazy.Value.IsFaulted || lazy.Value.IsCanceled)
+            {
+                // Don't let a transient connect failure permanently poison the cache entry — remove
+                // it (only if it's still the same faulted/cancelled Lazy) so the next call retries.
+                _connections.TryRemove(new KeyValuePair<string, Lazy<Task<TConnection>>>(key, lazy));
+                throw;
             }
         }
 

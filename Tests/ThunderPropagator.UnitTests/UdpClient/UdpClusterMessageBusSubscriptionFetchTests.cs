@@ -38,14 +38,19 @@ public class UdpClusterMessageBusSubscriptionFetchTests
         result.Should().ContainSingle(d => d.SubscriptionId == "sub-1");
 
         await socket.Received(1).SendDatagramAsync(
-            Arg.Is<byte[]>(bytes =>
-            {
-                var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-                var request = frame?.PayloadJson.FromNJson<UdpClusterRequestEnvelope>();
-                return request is not null && request.Kind == UdpClusterRequestKind.FetchSubscriptions && request.ChannelKey == channelKey;
-            }),
+            Arg.Is<byte[]>(bytes => IsFetchSubscriptionsRequest(bytes, channelKey)),
             Arg.Any<IPEndPoint>(),
             Arg.Any<CancellationToken>());
+    }
+
+    // A plain helper (rather than the previous inline statement-bodied lambda) is required
+    // because Arg.Is<T> takes an Expression<Predicate<T>>, and expression trees cannot contain
+    // a statement body, the null-conditional operator, or an 'is' pattern-matching operator.
+    private static bool IsFetchSubscriptionsRequest(byte[] bytes, Guid channelKey)
+    {
+        var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
+        var request = frame?.PayloadJson.FromNJson<UdpClusterRequestEnvelope>();
+        return request is not null && request.Kind == UdpClusterRequestKind.FetchSubscriptions && request.ChannelKey == channelKey;
     }
 
     [Fact]

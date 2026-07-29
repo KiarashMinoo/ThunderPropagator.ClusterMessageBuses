@@ -78,7 +78,7 @@ public class WebApiClusterMessageBusConstructionTests
     [Fact]
     public async Task DisposeAsync_AlsoRemovesFanOutSubscriptionsTheCallerNeverDisposedItself()
     {
-        await using var bus = await WebApiClusterMessageBusTestHelpers.CreateBusAsync();
+        var bus = await WebApiClusterMessageBusTestHelpers.CreateBusAsync();
 
         Func<ThunderPropagator.Application.Channels.Cluster.MessageBus.ClusterFanOutMessage, CancellationToken, Task> noOpHandler = (_, _) => Task.CompletedTask;
         var subscriptionHandle = await bus.SubscribeAsync(Guid.NewGuid(), noOpHandler);

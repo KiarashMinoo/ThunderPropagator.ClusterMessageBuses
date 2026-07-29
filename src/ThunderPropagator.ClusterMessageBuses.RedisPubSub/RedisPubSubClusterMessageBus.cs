@@ -71,7 +71,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         // substitute an NSubstitute-backed IConnectionMultiplexer instead of requiring a live server.
         public RedisPubSubClusterMessageBus(
             IOptions<RedisPubSubClusterMessageBusOptions> options,
-            ClusterConfiguration clusterConfiguration,
+            ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration clusterConfiguration,
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IConnectionMultiplexer>>? connectionFactory = null)
@@ -79,7 +79,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
                 ?? throw new InvalidOperationException(
-                    $"{nameof(ClusterConfiguration)}.{nameof(ClusterConfiguration.NodeEndpoint)} must be set for " +
+                    $"{nameof(ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration)}.{nameof(ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration.NodeEndpoint)} must be set for " +
                     $"{nameof(RedisPubSubClusterMessageBus)} to identify this node's request/reply channels.");
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<RedisPubSubClusterMessageBus>();
@@ -120,11 +120,11 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
                 _subscriber = _connection.GetSubscriber();
 
                 var requestChannel = RedisChannelNaming.RequestChannel(_options.ChannelPrefix, _nodeEndpoint);
-                _requestHandler = (_, value) => _ = HandleRequestDeliveryAsync(value.ToString() ?? string.Empty, _lifetimeCts.Token);
+                _requestHandler = (channel, value) => _ = HandleRequestDeliveryAsync(value.ToString() ?? string.Empty, _lifetimeCts.Token);
                 await _subscriber.SubscribeAsync(RedisChannel.Literal(requestChannel), _requestHandler).ConfigureAwait(false);
 
                 var replyChannel = RedisChannelNaming.ReplyChannel(_options.ChannelPrefix, _nodeEndpoint);
-                _replyHandler = (_, value) => _ = HandleReplyDeliveryAsync(value.ToString() ?? string.Empty, _lifetimeCts.Token);
+                _replyHandler = (channel, value) => _ = HandleReplyDeliveryAsync(value.ToString() ?? string.Empty, _lifetimeCts.Token);
                 await _subscriber.SubscribeAsync(RedisChannel.Literal(replyChannel), _replyHandler).ConfigureAwait(false);
 
                 _initialized = true;

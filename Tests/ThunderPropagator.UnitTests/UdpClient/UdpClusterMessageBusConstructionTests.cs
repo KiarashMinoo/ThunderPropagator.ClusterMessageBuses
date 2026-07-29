@@ -76,7 +76,7 @@ public class UdpClusterMessageBusConstructionTests
     [Fact]
     public async Task DisposeAsync_AlsoRemovesFanOutSubscriptionsTheCallerNeverDisposedItself()
     {
-        await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
+        var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
         Func<ClusterFanOutMessage, CancellationToken, Task> noOpHandler = (_, _) => Task.CompletedTask;
         var subscriptionHandle = await bus.SubscribeAsync(Guid.NewGuid(), noOpHandler);

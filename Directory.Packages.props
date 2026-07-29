@@ -56,8 +56,8 @@
     <!-- Same versions already pinned by ThunderPropagator.Feeviders' AwsSqs projects, for
          consistency across the org. AWS SDK v4 packages target net8.0+ only, which matches this
          repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
-    <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.6" />
-    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.6" />
+    <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.7" />
+    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.7" />
   </ItemGroup>
   <ItemGroup Label="AzureServiceBus">
     <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
@@ -66,7 +66,7 @@
   <ItemGroup Label="GcpPubSub">
     <!-- PublisherServiceApiClient/SubscriberServiceApiClient are GAPIC-generated with a protected
          parameterless constructor and virtual members specifically for direct test substitution
-         (Google's documented pattern) -- no custom wrapper interface needed, same reasoning as
+         (Google's documented pattern) - no custom wrapper interface needed, same reasoning as
          AWSSDK.SQS/AWSSDK.SimpleNotificationService above. -->
     <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.36.0" />
   </ItemGroup>

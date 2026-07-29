@@ -2,6 +2,7 @@ using Confluent.Kafka;
 using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.Kafka;
 
 namespace ThunderPropagator.UnitTests.Kafka;
 

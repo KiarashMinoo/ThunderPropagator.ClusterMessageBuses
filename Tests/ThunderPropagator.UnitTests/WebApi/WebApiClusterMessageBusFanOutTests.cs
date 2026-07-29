@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using FluentAssertions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Enums;
@@ -65,7 +66,7 @@ public class WebApiClusterMessageBusFanOutTests
     {
         var httpClient = Substitute.For<IWebApiClusterHttpClient>();
         httpClient.SendAsync(Arg.Any<HttpRequestMessage>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new HttpRequestException("simulated connect failure"));
+            .Throws(new HttpRequestException("simulated connect failure"));
 
         var discovery = WebApiClusterMessageBusTestHelpers.CreateDiscoverySubstitute(
             [new ClusterNodeEntry(new Uri("https://unreachable-peer:5001/"), IsLeader: false)]);

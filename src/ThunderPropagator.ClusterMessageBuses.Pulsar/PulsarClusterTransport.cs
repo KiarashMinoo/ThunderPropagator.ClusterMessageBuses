@@ -39,12 +39,12 @@ namespace ThunderPropagator.ClusterMessageBuses.Pulsar
         private Task<IProducer<string>> GetOrCreateProducerAsync(string topic)
         {
             return _producers.GetOrAdd(topic, static (t, client) => new Lazy<Task<IProducer<string>>>(
-                () => client.NewProducer(Schema.String).Topic(t).Create()), _client).Value;
+                () => Task.FromResult(client.NewProducer(Schema.String).Topic(t).Create())), _client).Value;
         }
 
         public async IAsyncEnumerable<string> SubscribeAsync(string topic, string subscriptionName, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            await using var consumer = await _client.NewConsumer(Schema.String)
+            await using var consumer = _client.NewConsumer(Schema.String)
                 .Topic(topic)
                 .SubscriptionName(subscriptionName)
                 .InitialPosition(SubscriptionInitialPosition.Latest)

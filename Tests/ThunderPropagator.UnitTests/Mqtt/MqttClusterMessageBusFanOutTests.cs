@@ -41,7 +41,7 @@ public class MqttClusterMessageBusFanOutTests
 
         await using var subscription = await bus.SubscribeAsync(channelKey, NoOpHandler);
 
-        await transport.Received(1).SubscribeAsync(expectedTopic, Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(expectedTopic, Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -35,7 +35,7 @@ public class RabbitMqClusterMessageBusFanOutTests
             string.Empty,
             false,
             Arg.Any<BasicProperties>(),
-            Arg.Is<ReadOnlyMemory<byte>>(body => Encoding.UTF8.GetString(body.Span).FromNJson<ClusterFanOutMessage>()!.OriginId == bus.SelfId));
+            Arg.Is<ReadOnlyMemory<byte>>(body => Encoding.UTF8.GetString(body.ToArray()).FromNJson<ClusterFanOutMessage>()!.OriginId == bus.SelfId));
     }
 
     [Fact]

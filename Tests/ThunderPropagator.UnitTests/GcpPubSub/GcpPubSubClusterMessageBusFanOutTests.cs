@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Google.Cloud.PubSub.V1;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
@@ -34,7 +35,7 @@ public class GcpPubSubClusterMessageBusFanOutTests
     {
         var publisher = GcpPubSubClusterMessageBusTestHelpers.CreatePublisherSubstitute();
         publisher.PublishAsync(Arg.Any<TopicName>(), Arg.Any<IEnumerable<PubsubMessage>>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new InvalidOperationException("simulated Pub/Sub failure"));
+            .Throws(new InvalidOperationException("simulated Pub/Sub failure"));
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(publisher: publisher);
 

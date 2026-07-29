@@ -16,7 +16,7 @@ public class RedisPubSubClusterMessageBusConstructionTests
     public void Constructor_NodeEndpointNotSet_Throws()
     {
         var options = Options.Create(new RedisPubSubClusterMessageBusOptions());
-        var clusterConfiguration = new ClusterConfiguration { NodeEndpoint = null };
+        var clusterConfiguration = new ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration { NodeEndpoint = null };
         var channelResolver = Substitute.For<IClusterChannelResolver>();
         var connection = RedisPubSubClusterMessageBusTestHelpers.CreateSubstituteConnection();
 

@@ -72,7 +72,7 @@ internal static class RedisPubSubClusterMessageBusTestHelpers
             RequestTimeout = requestTimeout ?? TimeSpan.FromSeconds(30),
         });
 
-        var clusterConfiguration = new ClusterConfiguration { NodeEndpoint = nodeEndpoint ?? DefaultNodeEndpoint };
+        var clusterConfiguration = new ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration { NodeEndpoint = nodeEndpoint ?? DefaultNodeEndpoint };
 
         var bus = new RedisPubSubClusterMessageBus(
             options,

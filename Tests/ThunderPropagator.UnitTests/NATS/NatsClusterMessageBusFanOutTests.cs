@@ -41,7 +41,7 @@ public class NatsClusterMessageBusFanOutTests
 
         await using var subscription = await bus.SubscribeAsync(channelKey, NoOpHandler);
 
-        await transport.Received(1).SubscribeAsync(expectedSubject, Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(expectedSubject, Arg.Any<CancellationToken>());
     }
 
     [Fact]
