@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.0-beta.6] — 2026-07-29
+
+### 🚀 Features
+
+- Implement ZeroMQ IClusterMessageBus transport `(7550073)` — Kiarash Minoo
+
 ## [0.1.0-beta.5] — 2026-07-29
 
 ### 🚀 Features
