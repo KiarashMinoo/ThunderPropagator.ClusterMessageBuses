@@ -1,5 +1,9 @@
-## [0.1.0-beta.4] — 2026-07-29
+## [0.1.0-beta.5] — 2026-07-29
+
+### 🚀 Features
+
+- Implement gRPC IClusterMessageBus transport `(c103c59)` — Kiarash Minoo
 
 ### 🐛 Bug Fixes
 
-- ThunderPropagator.ClusterMessageBuses: Fix build errors and stabilize the test suite `(2a127a9)` — Kiarash Minoo
+- Fix NU5050: remove case-duplicate ReadMe.md tracked alongside README.md `(ebf36a9)` — Kiarash Minoo
