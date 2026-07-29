@@ -83,6 +83,19 @@
     <PackageVersion Include="Grpc.Tools" Version="2.82.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.35.1" />
   </ItemGroup>
+  <ItemGroup Label="ZeroMQ">
+    <!-- NetMQ is the pure-managed ZeroMQ binding for .NET (no native libzmq interop), consistent
+         with the ZeroMQ Feeder/Provider design in ThunderPropagator.Feeviders. RouterSocket/
+         DealerSocket (the classic, stable ZMQ pattern this transport uses per the ticket) are not
+         thread-safe and require single-thread affinity — NetMQPoller + NetMQQueue is the standard
+         NetMQ pattern for coordinating access to them from arbitrary caller threads. -->
+    <PackageVersion Include="NetMQ" Version="4.0.4.2" />
+    <!-- NetMQ 4.0.4.2 itself hard-pins System.Security.Cryptography.Xml 10.0.6, which has several
+         known high-severity DoS advisories (GHSA-23rf-6693-g89p and siblings, July 2026 .NET Patch
+         Tuesday). Pinned up to the patched 10.0.10 release directly so it wins resolution over
+         NetMQ's transitive minimum. -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+  </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="8.10.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
