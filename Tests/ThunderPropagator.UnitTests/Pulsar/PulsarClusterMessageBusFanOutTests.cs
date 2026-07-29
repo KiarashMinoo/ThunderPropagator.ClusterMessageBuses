@@ -41,7 +41,7 @@ public class PulsarClusterMessageBusFanOutTests
 
         await using var subscription = await bus.SubscribeAsync(channelKey, NoOpHandler);
 
-        await transport.Received(1).SubscribeAsync(expectedTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(expectedTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

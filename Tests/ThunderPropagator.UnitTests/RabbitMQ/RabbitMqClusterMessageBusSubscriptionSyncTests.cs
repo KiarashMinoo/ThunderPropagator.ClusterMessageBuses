@@ -39,7 +39,7 @@ public class RabbitMqClusterMessageBusSubscriptionSyncTests
             string.Empty,
             false,
             Arg.Any<BasicProperties>(),
-            Arg.Is<ReadOnlyMemory<byte>>(body => Encoding.UTF8.GetString(body.Span).FromNJson<ClusterSubscriptionEvent>()!.OriginId == bus.SelfId));
+            Arg.Is<ReadOnlyMemory<byte>>(body => Encoding.UTF8.GetString(body.ToArray()).FromNJson<ClusterSubscriptionEvent>()!.OriginId == bus.SelfId));
     }
 
     [Fact]

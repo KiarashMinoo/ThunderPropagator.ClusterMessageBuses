@@ -1,6 +1,8 @@
+using Amazon.SQS;
 using Amazon.SQS.Model;
 using FluentAssertions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.AwsSqs;
 
@@ -120,7 +122,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
     {
         var sqs = AwsSqsClusterMessageBusTestHelpers.CreateSqsSubstitute();
         sqs.SendMessageAsync(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new InvalidOperationException("simulated send failure"));
+            .Throws(new InvalidOperationException("simulated send failure"));
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sqs: sqs);
 

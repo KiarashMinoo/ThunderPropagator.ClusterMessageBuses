@@ -3,6 +3,7 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.Kafka;
 
 namespace ThunderPropagator.UnitTests.Kafka;
 

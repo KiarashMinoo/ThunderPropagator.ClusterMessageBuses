@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.Application.Channels;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.NATS;
@@ -29,7 +30,7 @@ public class NatsClusterMessageBusRequestReplyTests
     {
         var transport = NatsClusterMessageBusTestHelpers.CreateSubstituteTransport();
         transport.RequestAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new OperationCanceledException());
+            .Throws(new OperationCanceledException());
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 

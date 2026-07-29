@@ -2,6 +2,7 @@ using Amazon.SimpleNotificationService.Model;
 using Amazon.SQS.Model;
 using FluentAssertions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.AwsSqs;
@@ -37,7 +38,7 @@ public class AwsSqsClusterMessageBusSubscriptionSyncTests
     {
         var sns = AwsSqsClusterMessageBusTestHelpers.CreateSnsSubstitute();
         sns.PublishAsync(Arg.Any<PublishRequest>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new InvalidOperationException("simulated SNS failure"));
+            .Throws(new InvalidOperationException("simulated SNS failure"));
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sns: sns);
 

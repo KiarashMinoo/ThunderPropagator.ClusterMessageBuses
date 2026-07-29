@@ -77,7 +77,7 @@ public class TcpClusterMessageBusConstructionTests
     public async Task DisposeAsync_AlsoDisposesOutboundConnectionsTheCallerNeverDisposedItself()
     {
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(
+        var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(
             outboundConnectionFactory: TcpClusterMessageBusTestHelpers.OutboundConnectionFactoryReturning(connection));
 
         // Force an outbound connection to be created and cached, without disposing it ourselves —
@@ -93,7 +93,7 @@ public class TcpClusterMessageBusConstructionTests
     [Fact]
     public async Task DisposeAsync_AlsoRemovesFanOutSubscriptionsTheCallerNeverDisposedItself()
     {
-        await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
+        var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
         Func<ClusterFanOutMessage, CancellationToken, Task> noOpHandler = (_, _) => Task.CompletedTask;
         var subscriptionHandle = await bus.SubscribeAsync(Guid.NewGuid(), noOpHandler);

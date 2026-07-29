@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.Application.Channels;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
@@ -60,7 +61,7 @@ public class WebApiClusterMessageBusSubscriptionFetchTests
     {
         var httpClient = Substitute.For<IWebApiClusterHttpClient>();
         httpClient.SendAsync(Arg.Any<System.Net.Http.HttpRequestMessage>(), Arg.Any<CancellationToken>())
-            .Returns(_ => throw new System.Net.Http.HttpRequestException("simulated connect failure"));
+            .Throws(new System.Net.Http.HttpRequestException("simulated connect failure"));
 
         await using var bus = await WebApiClusterMessageBusTestHelpers.CreateBusAsync(httpClient: httpClient);
 

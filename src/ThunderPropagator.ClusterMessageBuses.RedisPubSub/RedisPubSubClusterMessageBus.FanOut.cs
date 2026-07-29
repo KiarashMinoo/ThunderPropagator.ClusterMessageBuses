@@ -32,7 +32,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             var channelName = RedisChannelNaming.FanOutChannel(_options.ChannelPrefix, channelKey);
             var redisChannel = RedisChannel.Literal(channelName);
 
-            Action<RedisChannel, RedisValue> handler = (_, value) =>
+            Action<RedisChannel, RedisValue> handler = (channel, value) =>
                 _ = HandleFanOutDeliveryAsync(value.ToString() ?? string.Empty, onMessage, _lifetimeCts.Token);
 
             await _subscriber!.SubscribeAsync(redisChannel, handler).ConfigureAwait(false);

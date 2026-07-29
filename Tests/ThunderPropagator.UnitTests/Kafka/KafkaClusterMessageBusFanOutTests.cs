@@ -4,6 +4,7 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.Kafka;
 
 namespace ThunderPropagator.UnitTests.Kafka;
 

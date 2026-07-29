@@ -35,8 +35,8 @@ public class PulsarClusterMessageBusConstructionTests
         var requestTopic = PulsarTopicNaming.RequestTopic("persistent://public/default/thunderpropagator-cluster", nodeEndpoint);
         var replyTopic = PulsarTopicNaming.ReplyTopic("persistent://public/default/thunderpropagator-cluster", nodeEndpoint);
 
-        await transport.Received(1).SubscribeAsync(requestTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await transport.Received(1).SubscribeAsync(replyTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(requestTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(replyTopic, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class PulsarClusterMessageBusConstructionTests
         await bus.EnsureInitializedAsync(CancellationToken.None);
         await bus.EnsureInitializedAsync(CancellationToken.None);
 
-        await transport.Received(2).SubscribeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(2).SubscribeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

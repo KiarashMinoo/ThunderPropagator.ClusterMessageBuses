@@ -35,8 +35,8 @@ public class MqttClusterMessageBusConstructionTests
         var requestTopic = MqttTopicNaming.RequestTopic("thunderpropagator/cluster", nodeEndpoint);
         var replyTopic = MqttTopicNaming.ReplyTopic("thunderpropagator/cluster", nodeEndpoint);
 
-        await transport.Received(1).SubscribeAsync(requestTopic, Arg.Any<CancellationToken>());
-        await transport.Received(1).SubscribeAsync(replyTopic, Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(requestTopic, Arg.Any<CancellationToken>());
+        transport.Received(1).SubscribeAsync(replyTopic, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class MqttClusterMessageBusConstructionTests
         await bus.EnsureInitializedAsync(CancellationToken.None);
         await bus.EnsureInitializedAsync(CancellationToken.None);
 
-        await transport.Received(2).SubscribeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        transport.Received(2).SubscribeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
