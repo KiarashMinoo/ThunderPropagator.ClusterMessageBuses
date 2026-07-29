@@ -39,5 +39,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AwsSqs\ThunderPropagator.ClusterMessageBuses.AwsSqs.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AzureServiceBus\ThunderPropagator.ClusterMessageBuses.AzureServiceBus.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.GcpPubSub\ThunderPropagator.ClusterMessageBuses.GcpPubSub.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Grpc\ThunderPropagator.ClusterMessageBuses.Grpc.csproj" />
     </ItemGroup>
 </Project>

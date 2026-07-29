@@ -11,7 +11,7 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
-    <File Path="ReadMe.md" />
+    <File Path="README.md" />
     <File Path="CLAUDE.md" />
   </Folder>
   <Folder Name="/Solution Items/.github/" />
@@ -91,6 +91,11 @@
       <Platform Solution="*|x86" Project="x86" />
     </Project>
     <Project Path="src/ThunderPropagator.ClusterMessageBuses.GcpPubSub/ThunderPropagator.ClusterMessageBuses.GcpPubSub.csproj">
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|x86" Project="x86" />
+    </Project>
+    <Project Path="src/ThunderPropagator.ClusterMessageBuses.Grpc/ThunderPropagator.ClusterMessageBuses.Grpc.csproj">
       <Platform Solution="*|ARM64" Project="ARM64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
