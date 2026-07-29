@@ -11,7 +11,7 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
-    <File Path="ReadMe.md" />
+    <File Path="README.md" />
     <File Path="CLAUDE.md" />
   </Folder>
   <Folder Name="/Solution Items/.github/" />
