@@ -67,6 +67,35 @@ namespace ThunderPropagator.ClusterMessageBuses.SharedKernel
         }
 
         /// <summary>
+        /// Evicts and disposes the cached connection for <paramref name="key" />, if one is
+        /// currently cached and connected successfully — for a caller that discovers a connection
+        /// has gone bad independently of <see cref="GetOrCreateAsync" /> itself (e.g. a background
+        /// health/keepalive loop noticing a long-lived stream's read or write fail). Without this,
+        /// a connection that connects successfully but later goes bad would never be evicted, since
+        /// <see cref="GetOrCreateAsync" /> only detects a failure in the connect step itself.
+        /// </summary>
+        /// <param name="key">Identifies the connection — typically a peer endpoint or connection string.</param>
+        public async ValueTask InvalidateAsync(string key)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+            if (!_connections.TryRemove(key, out var lazy) || !lazy.IsValueCreated || !lazy.Value.IsCompletedSuccessfully)
+                return;
+
+            var connection = await lazy.Value.ConfigureAwait(false);
+
+            switch (connection)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Disposes every successfully-created cached connection that implements
         /// <see cref="IAsyncDisposable" /> or <see cref="IDisposable" />, and clears the cache.
         /// Connections whose construction never completed successfully (still in flight, faulted, or

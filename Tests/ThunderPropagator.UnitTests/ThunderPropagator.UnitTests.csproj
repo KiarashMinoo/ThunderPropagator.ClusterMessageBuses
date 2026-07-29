@@ -29,6 +29,8 @@
         <PackageReference Include="AWSSDK.SimpleNotificationService"/>
         <PackageReference Include="Azure.Messaging.ServiceBus"/>
         <PackageReference Include="Google.Cloud.PubSub.V1"/>
+        <PackageReference Include="Grpc.AspNetCore"/>
+        <PackageReference Include="Grpc.Net.Client"/>
         <PackageReference Include="Microsoft.Extensions.Options"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
@@ -53,5 +55,6 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AwsSqs\ThunderPropagator.ClusterMessageBuses.AwsSqs.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.AzureServiceBus\ThunderPropagator.ClusterMessageBuses.AzureServiceBus.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.GcpPubSub\ThunderPropagator.ClusterMessageBuses.GcpPubSub.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Grpc\ThunderPropagator.ClusterMessageBuses.Grpc.csproj" />
     </ItemGroup>
 </Project>

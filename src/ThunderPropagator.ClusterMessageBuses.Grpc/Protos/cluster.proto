@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+option csharp_namespace = "ThunderPropagator.ClusterMessageBuses.Grpc.Protos";
+
+package thunderpropagator.cluster;
+
+// One physical bidirectional stream per peer, opened by whichever side dials the other (mirrors
+// every other direct-peer transport in this repo, e.g. WebSocketClusterMessageBus): the dialing
+// side writes its own locally-published fan-out messages on the request stream, and the dialed
+// side's server implementation dispatches whatever it reads to its own local subscribers. The
+// response stream is intentionally left unused by the server (each side only ever writes on the
+// stream it dialed, and reads on the stream where it is the server) — this keeps every peer pair
+// symmetric with exactly two independent calls, one per direction, exactly like the WebSocket
+// transport's outbound-connect-plus-inbound-accept pair.
+message PushedMessageBatch {
+  string channel_key = 1;
+  string payload_json = 2;
+}
+
+service ClusterFanOut {
+  rpc Stream(stream PushedMessageBatch) returns (stream PushedMessageBatch);
+}
+
+// Same one-call-per-direction shape as ClusterFanOut, but subscription-sync's response stream
+// carries a lightweight ack rather than being unused, since GrpcClusterMessageBus resends its
+// full locally-known subscription state after a reconnect and needs to know the peer applied it.
+message SubscriptionEvent {
+  string channel_key = 1;
+  string payload_json = 2;
+}
+
+message SubscriptionAck {
+  bool acknowledged = 1;
+}
+
+service ClusterSubscriptionSync {
+  rpc Stream(stream SubscriptionEvent) returns (stream SubscriptionAck);
+}
+
+// The three leader/peer-pull operations: unary request/response, since gRPC's own call already
+// binds a response to its request (no hand-rolled correlation-id/reply-destination scheme needed,
+// unlike the broker transports elsewhere in this repo). Response payloads (snapshot entries,
+// subscription descriptors) ride as NJson-serialized blobs rather than being re-modeled field by
+// field in proto — the same convention every other transport in this repo uses for these
+// application-defined C# types (SnapshotEntry, ClusterSubscriptionDescriptor).
+message RestoreSnapshotRequest {
+  string channel_name = 1;
+}
+
+message RestoreSnapshotResponse {
+  bool success = 1;
+  string error_message = 2;
+  // NJson-serialized ThunderPropagator.Application.Channels.Snapshots.SnapshotEntry[].
+  string entries_json = 3;
+}
+
+message SyncDeltaRequest {
+  string channel_name = 1;
+  int64 since_ticks = 2;
+}
+
+message SyncDeltaResponse {
+  bool success = 1;
+  string error_message = 2;
+  // NJson-serialized ThunderPropagator.Application.Channels.Snapshots.SnapshotEntry[].
+  string updated_entries_json = 3;
+  repeated int32 deleted_hash_keys = 4;
+}
+
+service ClusterSnapshot {
+  rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse);
+  rpc SyncDelta(SyncDeltaRequest) returns (SyncDeltaResponse);
+}
+
+message FetchSubscriptionsRequest {
+  string channel_key = 1;
+}
+
+message FetchSubscriptionsResponse {
+  bool success = 1;
+  string error_message = 2;
+  // NJson-serialized ThunderPropagator.Application.Channels.Cluster.Subscriptions.ClusterSubscriptionDescriptor[].
+  string descriptors_json = 3;
+}
+
+service ClusterSubscriptionFetch {
+  rpc FetchSubscriptions(FetchSubscriptionsRequest) returns (FetchSubscriptionsResponse);
+}
