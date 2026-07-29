@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.0-beta.7] — 2026-07-29
+
+### 📝 Documentation
+
+- Remove root README.md `(255bb83)` — Kiarash Minoo
+
 ## [0.1.0-beta.6] — 2026-07-29
 
 ### 🚀 Features

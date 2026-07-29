@@ -1,5 +1,5 @@
-## [0.1.0-beta.6] — 2026-07-29
+## [0.1.0-beta.7] — 2026-07-29
 
-### 🚀 Features
+### 📝 Documentation
 
-- Implement ZeroMQ IClusterMessageBus transport `(7550073)` — Kiarash Minoo
+- Remove root README.md `(255bb83)` — Kiarash Minoo
