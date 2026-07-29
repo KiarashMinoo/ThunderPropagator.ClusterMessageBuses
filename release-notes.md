@@ -1,5 +1,5 @@
-## [0.1.0-beta.3] — 2026-07-29
+## [0.1.0-beta.4] — 2026-07-29
 
-### 🚀 Features
+### 🐛 Bug Fixes
 
-- Implement the GcpPubSub IClusterMessageBus transport (14th and last on the CLAUDE.md roadmap) `(cceefc5)` — Kiarash Minoo
+- ThunderPropagator.ClusterMessageBuses: Fix build errors and stabilize the test suite `(2a127a9)` — Kiarash Minoo

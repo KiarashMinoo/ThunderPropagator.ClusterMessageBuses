@@ -21,6 +21,6 @@
   </PropertyGroup>
   <!-- Version is bumped by CI per branch — never hand-edit this. -->
   <PropertyGroup Label="Versioning">
-    <Version>0.1.0-beta.3</Version>
+    <Version>0.1.0-beta.4</Version>
   </PropertyGroup>
 </Project>

@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.0-beta.4] — 2026-07-29
+
+### 🐛 Bug Fixes
+
+- ThunderPropagator.ClusterMessageBuses: Fix build errors and stabilize the test suite `(2a127a9)` — Kiarash Minoo
+
 ## [0.1.0-beta.3] — 2026-07-29
 
 ### 🚀 Features
