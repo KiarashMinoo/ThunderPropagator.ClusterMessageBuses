@@ -89,7 +89,7 @@
          DealerSocket (the classic, stable ZMQ pattern this transport uses per the ticket) are not
          thread-safe and require single-thread affinity — NetMQPoller + NetMQQueue is the standard
          NetMQ pattern for coordinating access to them from arbitrary caller threads. -->
-    <PackageVersion Include="NetMQ" Version="4.0.4.2" />
+    <PackageVersion Include="NetMQ" Version="4.0.4.3" />
     <!-- NetMQ 4.0.4.2 itself hard-pins System.Security.Cryptography.Xml 10.0.6, which has several
          known high-severity DoS advisories (GHSA-23rf-6693-g89p and siblings, July 2026 .NET Patch
          Tuesday). Pinned up to the patched 10.0.10 release directly so it wins resolution over
