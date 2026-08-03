@@ -50,7 +50,7 @@
     <PackageVersion Include="Apache.NMS.ActiveMQ" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup Label="RedisPubSub">
-    <PackageVersion Include="StackExchange.Redis" Version="3.0.17" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.1.0" />
   </ItemGroup>
   <ItemGroup Label="AwsSqs">
     <!-- Same versions already pinned by ThunderPropagator.Feeviders' AwsSqs projects, for
