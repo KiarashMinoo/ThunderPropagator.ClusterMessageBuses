@@ -34,13 +34,13 @@
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
   </ItemGroup>
   <ItemGroup Label="RabbitMQ">
-    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
   </ItemGroup>
   <ItemGroup Label="NATS">
-    <PackageVersion Include="NATS.Net" Version="3.0.1" />
+    <PackageVersion Include="NATS.Net" Version="3.1.0" />
   </ItemGroup>
   <ItemGroup Label="Pulsar">
-    <PackageVersion Include="DotPulsar" Version="5.3.1" />
+    <PackageVersion Include="DotPulsar" Version="5.3.2" />
   </ItemGroup>
   <ItemGroup Label="Mqtt">
     <PackageVersion Include="MQTTnet" Version="5.2.0.1603" />
