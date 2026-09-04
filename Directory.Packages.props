@@ -56,7 +56,7 @@
     <!-- Same versions already pinned by ThunderPropagator.Feeviders' AwsSqs projects, for
          consistency across the org. AWS SDK v4 packages target net8.0+ only, which matches this
          repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
-    <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.7" />
+    <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.11" />
     <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.7" />
   </ItemGroup>
   <ItemGroup Label="AzureServiceBus">
