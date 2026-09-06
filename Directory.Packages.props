@@ -34,13 +34,13 @@
     <PackageVersion Include="Confluent.Kafka" Version="2.15.0" />
   </ItemGroup>
   <ItemGroup Label="RabbitMQ">
-    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
   </ItemGroup>
   <ItemGroup Label="NATS">
-    <PackageVersion Include="NATS.Net" Version="3.0.1" />
+    <PackageVersion Include="NATS.Net" Version="3.2.0" />
   </ItemGroup>
   <ItemGroup Label="Pulsar">
-    <PackageVersion Include="DotPulsar" Version="5.3.1" />
+    <PackageVersion Include="DotPulsar" Version="5.3.3" />
   </ItemGroup>
   <ItemGroup Label="Mqtt">
     <PackageVersion Include="MQTTnet" Version="5.2.0.1603" />
@@ -50,14 +50,14 @@
     <PackageVersion Include="Apache.NMS.ActiveMQ" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup Label="RedisPubSub">
-    <PackageVersion Include="StackExchange.Redis" Version="3.0.17" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
   </ItemGroup>
   <ItemGroup Label="AwsSqs">
     <!-- Same versions already pinned by ThunderPropagator.Feeviders' AwsSqs projects, for
          consistency across the org. AWS SDK v4 packages target net8.0+ only, which matches this
          repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
     <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.11" />
-    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.7" />
+    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.11" />
   </ItemGroup>
   <ItemGroup Label="AzureServiceBus">
     <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
@@ -68,7 +68,7 @@
          parameterless constructor and virtual members specifically for direct test substitution
          (Google's documented pattern) - no custom wrapper interface needed, same reasoning as
          AWSSDK.SQS/AWSSDK.SimpleNotificationService above. -->
-    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.36.0" />
+    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.37.0" />
   </ItemGroup>
   <ItemGroup Label="Grpc">
     <!-- Grpc.AspNetCore brings in Grpc.AspNetCore.Server (for MapGrpcService on the host's own
@@ -78,10 +78,10 @@
          generated client/server base classes — ClientBase&lt;T&gt;-derived clients have a protected
          parameterless constructor and virtual RPC methods specifically to support direct test
          substitution, the same reasoning as GcpPubSub's GAPIC clients above. -->
-    <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
-    <PackageVersion Include="Grpc.Net.Client" Version="2.80.0" />
-    <PackageVersion Include="Grpc.Tools" Version="2.82.0" />
-    <PackageVersion Include="Google.Protobuf" Version="3.35.1" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
+    <PackageVersion Include="Google.Protobuf" Version="3.36.1" />
   </ItemGroup>
   <ItemGroup Label="ZeroMQ">
     <!-- NetMQ is the pure-managed ZeroMQ binding for .NET (no native libzmq interop), consistent
@@ -89,20 +89,20 @@
          DealerSocket (the classic, stable ZMQ pattern this transport uses per the ticket) are not
          thread-safe and require single-thread affinity — NetMQPoller + NetMQQueue is the standard
          NetMQ pattern for coordinating access to them from arbitrary caller threads. -->
-    <PackageVersion Include="NetMQ" Version="4.0.4.2" />
+    <PackageVersion Include="NetMQ" Version="4.0.4.3" />
     <!-- NetMQ 4.0.4.2 itself hard-pins System.Security.Cryptography.Xml 10.0.6, which has several
          known high-severity DoS advisories (GHSA-23rf-6693-g89p and siblings, July 2026 .NET Patch
          Tuesday). Pinned up to the patched 10.0.10 release directly so it wins resolution over
          NetMQ's transitive minimum. -->
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.11" />
   </ItemGroup>
   <ItemGroup Label="Testing Packages">
     <PackageVersion Include="FluentAssertions" Version="8.10.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
-    <PackageVersion Include="NSubstitute" Version="6.0.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5">
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageVersion>
