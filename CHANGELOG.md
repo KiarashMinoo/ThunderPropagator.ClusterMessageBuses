@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.0-beta.9] — 2026-09-06
+
+### ⚙️ CI / Tooling
+
+- ThunderPropagator.ClusterMessageBuses: Switch CI to OIDC NuGet publish, bump dependencies `(87d631b)` — Kiarash Minoo
+
 ## [0.1.0-beta.8] — 2026-09-04
 
 ### 📦 Dependencies
