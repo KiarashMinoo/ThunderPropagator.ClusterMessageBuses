@@ -57,7 +57,7 @@
          consistency across the org. AWS SDK v4 packages target net8.0+ only, which matches this
          repo's net8.0/net9.0/net10.0 multi-targeting exactly. -->
     <PackageVersion Include="AWSSDK.SQS" Version="4.0.100.11" />
-    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.11" />
+    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.100.12" />
   </ItemGroup>
   <ItemGroup Label="AzureServiceBus">
     <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
