@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Polly.Core" />
-    <PackageReference Include="$(ThunderPropagatorPackageId)" />
+    <PackageReference Include="$(ThunderPropagatorClusterPackageId)" />
   </ItemGroup>
 
 </Project>

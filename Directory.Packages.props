@@ -3,12 +3,16 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
-  <PropertyGroup Label="ThunderPropagatorPackages">
-    <ThunderPropagatorVersion>1.0.1-beta.205</ThunderPropagatorVersion>
-    <ThunderPropagatorPackageId>ThunderPropagator.Cluster$(PackageIdPlatformSuffix)</ThunderPropagatorPackageId>
-  </PropertyGroup>
+  <!-- This repo depends on the CLUSTER variant of the core package, not the plain one:
+       ThunderPropagatorClusterPackageId (from Shared.PackageIds.props, imported via
+       Directory.Build.props -> SharedProps.props -> Shared.NugetBuild.props) is the correct,
+       already-existing property for that. A local ThunderPropagatorPackageId property used to
+       live here instead, shadowing the shared file's OWN ThunderPropagatorPackageId (which
+       means the plain, non-Cluster package) with a different value; harmless only by
+       accident, since nothing else in the repo family expected this file's local override to
+       apply anywhere else. Only the version pin stays local. -->
   <ItemGroup>
-    <PackageVersion Include="$(ThunderPropagatorPackageId)" Version="$(ThunderPropagatorVersion)" />
+    <PackageVersion Include="$(ThunderPropagatorClusterPackageId)" Version="1.0.1-beta.205" />
   </ItemGroup>
   <ItemGroup Label="Resilience">
     <!-- Transport-agnostic retry/circuit-breaker building block for SharedKernel's
