@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace ThunderPropagator.ClusterMessageBuses.WebApi
 {
     /// <summary>
@@ -16,6 +14,6 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
         /// the listener is running. Completes when <paramref name="cancellationToken"/> is cancelled
         /// or the listener is disposed.
         /// </summary>
-        IAsyncEnumerable<WebApiIncomingRequest> AcceptRequestsAsync([EnumeratorCancellation] CancellationToken cancellationToken);
+        IAsyncEnumerable<WebApiIncomingRequest> AcceptRequestsAsync(CancellationToken cancellationToken);
     }
 }

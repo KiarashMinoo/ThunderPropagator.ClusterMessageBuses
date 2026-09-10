@@ -8,7 +8,7 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
     /// transform used to turn an arbitrary
     /// <see cref="ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration.NodeEndpoint"/>
     /// <see cref="Uri"/> into a subject-token-safe segment. Mirrors
-    /// <c>ThunderPropagator.ClusterMessageBuses.Kafka.KafkaTopicNaming"/> /
+    /// <c>ThunderPropagator.ClusterMessageBuses.Kafka.KafkaTopicNaming</c> /
     /// <c>ThunderPropagator.ClusterMessageBuses.RabbitMQ.RabbitMqTopicNaming</c> exactly, except
     /// there is no separate reply-subject builder: NATS's native request/reply delivers replies to a
     /// per-call ephemeral inbox subject the client library manages itself, so this transport never

@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 {
     /// <summary>
@@ -16,6 +14,6 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         /// as long as the listener is running. Completes when <paramref name="cancellationToken"/>
         /// is cancelled or the listener is disposed.
         /// </summary>
-        IAsyncEnumerable<ITcpClusterConnection> AcceptConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken);
+        IAsyncEnumerable<ITcpClusterConnection> AcceptConnectionsAsync(CancellationToken cancellationToken);
     }
 }

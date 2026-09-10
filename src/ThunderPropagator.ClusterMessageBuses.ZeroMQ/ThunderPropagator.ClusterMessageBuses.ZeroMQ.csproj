@@ -2,9 +2,6 @@
 
   <ItemGroup>
     <PackageReference Include="NetMQ" />
-    <!-- Direct reference so this project's resolution picks up the patched version pinned in
-         Directory.Packages.props instead of NetMQ's own transitively-pinned vulnerable one. -->
-    <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>

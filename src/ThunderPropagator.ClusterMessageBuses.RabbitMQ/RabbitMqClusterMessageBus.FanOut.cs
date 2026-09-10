@@ -22,7 +22,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             try
             {
                 await _publishChannel!.ExchangeDeclareAsync(exchange, ExchangeType.Fanout).ConfigureAwait(false);
-                await _publishChannel.BasicPublishAsync(exchange, string.Empty, false, new BasicProperties(), body).ConfigureAwait(false);
+                await _publishChannel!.BasicPublishAsync(exchange, string.Empty, false, new BasicProperties(), body).ConfigureAwait(false);
             }
             catch (Exception exception)
             {

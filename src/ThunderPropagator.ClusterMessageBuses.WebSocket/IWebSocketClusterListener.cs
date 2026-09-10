@@ -17,6 +17,6 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         /// connection, for as long as the listener is running. Completes when
         /// <paramref name="cancellationToken"/> is cancelled or the listener is disposed.
         /// </summary>
-        IAsyncEnumerable<System.Net.WebSockets.WebSocket> AcceptConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken);
+        IAsyncEnumerable<System.Net.WebSockets.WebSocket> AcceptConnectionsAsync(CancellationToken cancellationToken);
     }
 }

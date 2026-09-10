@@ -14,7 +14,7 @@ namespace ThunderPropagator.UnitTests.RabbitMQ;
 /// constructs the bus through the same seams the production DI extension uses
 /// (<c>IOptions&lt;RabbitMqClusterMessageBusOptions&gt;</c>, <c>ClusterConfiguration</c>,
 /// <c>IClusterChannelResolver</c>, a connection-factory delegate) so no test ever needs a live
-/// RabbitMQ broker: <see cref="RabbitMQ.Client.IConnection"/> and <see cref="RabbitMQ.Client.IChannel"/>
+/// RabbitMQ broker: <see cref="IConnection"/> and <see cref="IChannel"/>
 /// are both plain interfaces, substituted directly with NSubstitute. <see cref="CreateBusAsync"/>
 /// also awaits <c>EnsureInitializedAsync</c> before returning, since — unlike Kafka's
 /// synchronous-constructor design — RabbitMQ.Client v7's connection/channel/topology setup is fully

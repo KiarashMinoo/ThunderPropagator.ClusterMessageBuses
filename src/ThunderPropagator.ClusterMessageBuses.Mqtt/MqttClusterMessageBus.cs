@@ -18,7 +18,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
     /// for messages). MQTT has no native request/reply (unlike NATS), so the three leader/peer-pull
     /// operations (<see cref="RestoreFromLeaderAsync"/>, <see cref="SyncDeltaFromLeaderAsync"/>,
     /// <see cref="FetchPeerSubscriptionsAsync"/>) use the same hand-rolled correlation-id/reply-topic
-    /// scheme as <c>KafkaClusterMessageBus"/>/<c>PulsarClusterMessageBus</c>: every node subscribes to
+    /// scheme as <c>KafkaClusterMessageBus</c>/<c>PulsarClusterMessageBus</c>: every node subscribes to
     /// its own request topic and its own reply topic (both named from its own
     /// <see cref="ClusterConfiguration.NodeEndpoint"/>) and answers by resolving the requested channel
     /// locally, replying on the requester's own reply topic.

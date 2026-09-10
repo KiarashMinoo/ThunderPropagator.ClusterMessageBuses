@@ -34,7 +34,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
     /// One shared channel (<see cref="_publishChannel"/>) is reused for every publish this transport
     /// performs, serialized behind <see cref="_publishLock"/> — the RabbitMQ .NET client explicitly
     /// requires that a single <c>IChannel</c> never be used concurrently by more than one thread for
-    /// publishing. Each <see cref="SubscribeAsync(Guid, Func{ThunderPropagator.Application.Channels.Cluster.ClusterFanOutMessage,CancellationToken,Task},CancellationToken)"/>
+    /// publishing. Each <see cref="SubscribeAsync(Guid, Func{ClusterFanOutMessage,CancellationToken,Task},CancellationToken)"/>
     /// call, and the two listener loops started during initialization, each get their own dedicated
     /// channel instead, so one subscriber's consumer dispatch can never block another's.
     /// </para>

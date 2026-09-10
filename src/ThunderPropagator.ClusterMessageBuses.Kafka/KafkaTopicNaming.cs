@@ -5,7 +5,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
 {
     /// <summary>
     /// Builds every Kafka topic name <see cref="KafkaClusterMessageBus"/> uses, and the one-way
-    /// slug transform used to turn an arbitrary <see cref="ClusterConfiguration.NodeEndpoint"/>
+    /// slug transform used to turn an arbitrary <see cref="ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration.NodeEndpoint"/>
     /// <see cref="Uri"/> into a Kafka-legal topic-name segment (Kafka topic names are restricted
     /// to <c>[a-zA-Z0-9._-]</c>, up to 249 characters).
     /// </summary>

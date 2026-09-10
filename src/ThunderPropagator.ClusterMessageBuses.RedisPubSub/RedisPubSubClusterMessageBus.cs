@@ -22,7 +22,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
     /// hand-rolled correlation-id/reply-channel scheme as <c>KafkaClusterMessageBus</c>/
     /// <c>PulsarClusterMessageBus</c>/<c>MqttClusterMessageBus</c>/<c>ActiveMqClusterMessageBus</c>:
     /// every node subscribes to its own request channel and its own reply channel (both named from
-    /// its own <see cref="ClusterConfiguration.NodeEndpoint"/>) and answers by resolving the
+    /// its own <see cref="ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration.NodeEndpoint"/>) and answers by resolving the
     /// requested channel locally, replying on the requester's own reply channel.
     /// </summary>
     /// <remarks>

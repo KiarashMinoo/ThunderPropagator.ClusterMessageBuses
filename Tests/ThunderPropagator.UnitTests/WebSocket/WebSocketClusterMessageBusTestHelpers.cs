@@ -28,8 +28,8 @@ internal static class WebSocketClusterMessageBusTestHelpers
 
     /// <summary>
     /// Builds a substitute <see cref="System.Net.WebSockets.WebSocket"/> whose <c>SendAsync</c>
-    /// always completes successfully and whose <c>ReceiveAsync</c>, by default, blocks until
-    /// <paramref name="receiveCancellationToken"/>-observing cancellation rather than returning
+    /// always completes successfully and whose <c>ReceiveAsync</c>, by default, blocks until the
+    /// caller's own <see cref="CancellationToken"/> is cancelled rather than returning
     /// immediately — an unconfigured NSubstitute member would otherwise return a default
     /// (all-zero) <see cref="WebSocketReceiveResult"/> with <c>EndOfMessage = false</c>, which would
     /// spin <see cref="WebSocketPeerConnection.ReceiveFramesAsync"/>'s inner loop forever without

@@ -24,6 +24,17 @@
     "$(XxxPackageId)" convention works with this script unmodified -- nothing here is
     specific to any one consuming repo.
 
+    Also discovers PackageVersion entries that were never converted to that convention:
+    any Include that is a literal package name starting with "ThunderPropagator" (not a
+    "$(...)" property reference) is picked up by name too -- covers e.g. a repo's own
+    Games/Demo sample packages, which deliberately have no Shared.PackageIds.props
+    property at all (see that file), or any other not-yet-converted family reference. A
+    literal-named entry pinned via a shared version property is folded into that
+    property's resolution/update exactly like a property-based Include would be; one
+    pinned with its own literal version string is resolved and updated individually,
+    matched back to its own PackageVersion line by its literal Include text rather than
+    by a property name.
+
     nuget.org is a public feed with no auth required, so no token or source registration
     is needed -- this queries "$Source" directly regardless of what's in NuGet.Config.
 
@@ -257,18 +268,31 @@ if ($packageIdMap.Count -eq 0) {
 }
 
 # ── Step 2: scan the target repo's Directory.Packages.props for PackageVersion
-#    entries whose Include references one of those PackageId properties ───────
+#    entries whose Include references one of those PackageId properties, OR whose
+#    Include is a literal package name starting with "ThunderPropagator" (an entry
+#    never converted to the "$(XxxPackageId)" convention -- e.g. a repo's own
+#    Games/Demo sample packages, which deliberately have no Shared.PackageIds.props
+#    property at all) ──────────────────────────────────────────────────────────
 #    Groups entries that share a version PROPERTY together (so BuildingBlocks +
 #    BuildingBlocksModules resolve and update as one family); entries pinned
-#    with a literal version string are tracked individually.
+#    with a literal version string are tracked individually, separately for the
+#    property-Include and literal-name-Include shapes since each needs its own
+#    line-matching pattern to write the update back.
 
 $propsContent = Get-Content -Path $PropsPath -Raw
-$pattern      = '<PackageVersion\s+Include="\$\((?<propid>\w+PackageId)\)"\s+Version="(?:\$\((?<verprop>\w+)\)|(?<verlit>[^"$][^"]*))"'
 
-$byVersionProperty = [ordered]@{}   # verprop -> list of literal package ids
-$byLiteralEntry    = @()            # one entry per literally-pinned PackageVersion line
+$propertyIncludePattern = '<PackageVersion\s+Include="\$\((?<propid>\w+PackageId)\)"\s+Version="(?:\$\((?<verprop>\w+)\)|(?<verlit>[^"$][^"]*))"'
+# Include is literal text starting with "ThunderPropagator", optionally followed by one
+# or more "$(...)" suffix tokens (e.g. $(PackageIdConfigurationSuffix)$(PackageIdPlatformSuffix))
+# before the closing quote -- never a bare "$(...)" property reference on its own, which
+# the pattern above already covers, so the two patterns' matches never overlap.
+$literalIncludePattern  = '<PackageVersion\s+Include="(?<pkgid>ThunderPropagator[^"$]*)(?:\$\([^)]*\))*"\s+Version="(?:\$\((?<verprop>\w+)\)|(?<verlit>[^"$][^"]*))"'
 
-foreach ($m in [regex]::Matches($propsContent, $pattern)) {
+$byVersionProperty  = [ordered]@{}   # verprop -> list of literal package ids
+$byLiteralEntry     = @()           # one entry per literally-pinned PackageVersion line matched via a "$(XxxPackageId)" Include
+$byLiteralNameEntry = @()           # one entry per literally-pinned PackageVersion line matched via a literal "ThunderPropagator..." Include
+
+foreach ($m in [regex]::Matches($propsContent, $propertyIncludePattern)) {
     $propId = $m.Groups['propid'].Value
     if (-not $packageIdMap.ContainsKey($propId)) { continue }   # not a known ThunderPropagator package id
     $literalId = $packageIdMap[$propId]
@@ -286,7 +310,27 @@ foreach ($m in [regex]::Matches($propsContent, $pattern)) {
     }
 }
 
-if ($byVersionProperty.Count -eq 0 -and $byLiteralEntry.Count -eq 0) {
+foreach ($m in [regex]::Matches($propsContent, $literalIncludePattern)) {
+    $literalId = $m.Groups['pkgid'].Value.Trim()
+    # A literal-Include line can never also match $propertyIncludePattern (Include is
+    # either a bare "$(...)" property reference or literal text, never both) -- this
+    # guard just avoids double-listing a package id as a candidate for the same version
+    # property twice if it somehow already came from packageIdMap above.
+    if ($packageIdMap.Values -contains $literalId) { continue }
+
+    if ($m.Groups['verprop'].Success) {
+        $verProp = $m.Groups['verprop'].Value
+        if (-not $byVersionProperty.Contains($verProp)) { $byVersionProperty[$verProp] = @() }
+        $byVersionProperty[$verProp] += $literalId
+    } else {
+        $byLiteralNameEntry += [pscustomobject]@{
+            LiteralId = $literalId
+            Current   = $m.Groups['verlit'].Value
+        }
+    }
+}
+
+if ($byVersionProperty.Count -eq 0 -and $byLiteralEntry.Count -eq 0 -and $byLiteralNameEntry.Count -eq 0) {
     Write-Warn "No ThunderPropagator-family PackageVersion entries found in '$PropsPath' -- nothing to update."
     exit 0
 }
@@ -305,10 +349,11 @@ if (-not [string]::IsNullOrWhiteSpace($PackageId)) {
             $scopedByVersionProperty[$verProp] = $byVersionProperty[$verProp]
         }
     }
-    $byVersionProperty = $scopedByVersionProperty
-    $byLiteralEntry     = @($byLiteralEntry | Where-Object { $_.LiteralId -ieq $PackageId })
+    $byVersionProperty  = $scopedByVersionProperty
+    $byLiteralEntry     = @($byLiteralEntry     | Where-Object { $_.LiteralId -ieq $PackageId })
+    $byLiteralNameEntry = @($byLiteralNameEntry | Where-Object { $_.LiteralId -ieq $PackageId })
 
-    if ($byVersionProperty.Count -eq 0 -and $byLiteralEntry.Count -eq 0) {
+    if ($byVersionProperty.Count -eq 0 -and $byLiteralEntry.Count -eq 0 -and $byLiteralNameEntry.Count -eq 0) {
         Write-Warn "'$PackageId' is not a ThunderPropagator-family PackageVersion entry in '$PropsPath' -- nothing to do."
         exit 0
     }
@@ -387,7 +432,22 @@ foreach ($entry in $byLiteralEntry) {
     }
 }
 
-$totalUpdates = $propertyUpdates.Count + $literalUpdates.Count
+$literalNameUpdates = @()   # @{ LiteralId; Old; New } -- entries discovered via a literal "ThunderPropagator..." Include
+
+foreach ($entry in $byLiteralNameEntry) {
+    Write-Step "Resolving literal-named '$($entry.LiteralId)'"
+    $latest = Get-LatestPackageVersion -PackageId $entry.LiteralId -SourceUrl $Source
+    if (-not $latest) { continue }
+
+    if ($entry.Current -eq $latest) {
+        Write-Ok "  $($entry.LiteralId) is already latest: $($entry.Current)"
+    } else {
+        Write-Host "  $($entry.LiteralId) : $($entry.Current) --> $latest" -ForegroundColor Yellow
+        $literalNameUpdates += [pscustomobject]@{ LiteralId = $entry.LiteralId; Old = $entry.Current; New = $latest }
+    }
+}
+
+$totalUpdates = $propertyUpdates.Count + $literalUpdates.Count + $literalNameUpdates.Count
 
 # ── Check mode: report only ───────────────────────────────────────────────────
 
@@ -419,6 +479,15 @@ foreach ($u in $literalUpdates) {
     $propsContent = $propsContent -replace $linePattern, $replacement
 }
 
+foreach ($u in $literalNameUpdates) {
+    # No property name to key off here -- match the specific PackageVersion line back by
+    # its own literal Include text instead (escaped, since it can contain "." and "$(...)"
+    # suffix tokens after the literal id).
+    $linePattern = "(<PackageVersion\s+Include=`"$([regex]::Escape($u.LiteralId))[^`"]*`"\s+Version=`")[^`"]*(`")"
+    $replacement = '${1}' + $u.New + '${2}'
+    $propsContent = $propsContent -replace $linePattern, $replacement
+}
+
 if ($PSCmdlet.ShouldProcess($PropsPath, "Write $totalUpdates updated version(s)")) {
     Set-Content -Path $PropsPath -Value $propsContent -NoNewline -Encoding UTF8
     Write-Ok "Wrote $totalUpdates update(s) to $PropsPath"
@@ -426,7 +495,8 @@ if ($PSCmdlet.ShouldProcess($PropsPath, "Write $totalUpdates updated version(s)"
 
 Write-Host ""
 Write-Host "----------------------------------------------------" -ForegroundColor White
-foreach ($u in $propertyUpdates) { Write-Host "  $($u.Property): $($u.Old) -> $($u.New)" -ForegroundColor Green }
-foreach ($u in $literalUpdates)  { Write-Host "  $($u.LiteralId): $($u.Old) -> $($u.New)" -ForegroundColor Green }
+foreach ($u in $propertyUpdates)     { Write-Host "  $($u.Property): $($u.Old) -> $($u.New)" -ForegroundColor Green }
+foreach ($u in $literalUpdates)      { Write-Host "  $($u.LiteralId): $($u.Old) -> $($u.New)" -ForegroundColor Green }
+foreach ($u in $literalNameUpdates)  { Write-Host "  $($u.LiteralId): $($u.Old) -> $($u.New)" -ForegroundColor Green }
 Write-Host "----------------------------------------------------" -ForegroundColor White
 Write-Host "  Run 'dotnet restore' to pull the updated package(s)." -ForegroundColor DarkGray

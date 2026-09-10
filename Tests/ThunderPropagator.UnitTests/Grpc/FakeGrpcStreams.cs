@@ -5,7 +5,7 @@ namespace ThunderPropagator.UnitTests.Grpc;
 
 /// <summary>
 /// In-memory <see cref="IClientStreamWriter{T}"/> a test can inspect afterward — lets a test assert
-/// on exactly what <see cref="GrpcPeerConnection"/> wrote without a real gRPC channel.
+/// on exactly what <see cref="ThunderPropagator.ClusterMessageBuses.Grpc.GrpcPeerConnection"/> wrote without a real gRPC channel.
 /// </summary>
 internal sealed class FakeClientStreamWriter<T> : IClientStreamWriter<T>
 {

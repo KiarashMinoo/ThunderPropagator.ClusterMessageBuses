@@ -1,5 +1,4 @@
 using System.Net;
-using System.Runtime.CompilerServices;
 
 namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 {
@@ -21,6 +20,6 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         /// long as the socket is open. Completes when <paramref name="cancellationToken"/> is
         /// cancelled or the socket is disposed.
         /// </summary>
-        IAsyncEnumerable<UdpReceivedDatagram> ReceiveDatagramsAsync([EnumeratorCancellation] CancellationToken cancellationToken);
+        IAsyncEnumerable<UdpReceivedDatagram> ReceiveDatagramsAsync(CancellationToken cancellationToken);
     }
 }

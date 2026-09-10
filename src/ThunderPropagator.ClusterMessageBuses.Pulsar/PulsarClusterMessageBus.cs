@@ -17,7 +17,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Pulsar
     /// wrong for a fan-out bus). Pulsar has no native request/reply (unlike NATS), so the three
     /// leader/peer-pull operations (<see cref="RestoreFromLeaderAsync"/>,
     /// <see cref="SyncDeltaFromLeaderAsync"/>, <see cref="FetchPeerSubscriptionsAsync"/>) use the same
-    /// hand-rolled correlation-id/reply-topic scheme as <c>KafkaClusterMessageBus"/>: every node
+    /// hand-rolled correlation-id/reply-topic scheme as <see cref="PulsarClusterMessageBus"/>: every node
     /// listens on its own request topic (named from its own
     /// <see cref="ClusterConfiguration.NodeEndpoint"/>) and answers by resolving the requested
     /// channel locally, replying on the requester's own reply topic.

@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 {
     /// <summary>
@@ -16,6 +14,6 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
     {
         Task SendFrameAsync(TcpClusterFrame frame, CancellationToken cancellationToken);
 
-        IAsyncEnumerable<TcpClusterFrame> ReceiveFramesAsync([EnumeratorCancellation] CancellationToken cancellationToken);
+        IAsyncEnumerable<TcpClusterFrame> ReceiveFramesAsync(CancellationToken cancellationToken);
     }
 }
