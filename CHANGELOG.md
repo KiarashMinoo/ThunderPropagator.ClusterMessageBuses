@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.12] — 2026-09-10
+
+### 🐛 Bug Fixes
+
+- update package versions and clean up code references `(282d476)` — Kiarash Minoo
+
 ## [1.0.1-beta.11] — 2026-09-10
 
 ### 📦 Dependencies
