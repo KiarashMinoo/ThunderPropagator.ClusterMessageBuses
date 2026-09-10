@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.10] — 2026-09-10
+
+### 🐛 Bug Fixes
+
+- update package references and versioning for ThunderPropagator.Cluster `(7a788c2)` — Kiarash Minoo
+
 ## [0.1.0-beta.9] — 2026-09-06
 
 ### ⚙️ CI / Tooling
