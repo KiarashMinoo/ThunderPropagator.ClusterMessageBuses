@@ -24,7 +24,9 @@ Desktop.ini
 # ============================================================
 # Local Tooling & Agent State
 # ============================================================
-.claude/
+.claude/*
+!.claude/rules/
+!.claude/rules/**
 .shared-props/
 .obsidian/
 graphify-out/

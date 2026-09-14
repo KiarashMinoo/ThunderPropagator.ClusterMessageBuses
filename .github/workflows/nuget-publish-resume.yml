@@ -1,0 +1,24 @@
+# Auto-resumes a ci.yml run that failed only because of nuget.org's shared,
+# account-wide Trusted Publishing push-rate quota (see the 2026-09-14 notes in
+# KiarashMinoo/.github's nuget-oidc-publish/action.yml and
+# reusable-nuget-publish-resume.yml for the full story) -- instead of a human needing
+# to notice a quota-blocked run and click "Re-run failed jobs" once nuget.org's own
+# reported retry-after has passed. Only acts on runs whose failed-job logs contain the
+# exact NUGET_QUOTA_EXCEEDED marker; every other failure is left alone for a human to
+# look at. Safe to run this often -- every push in nuget-oidc-publish/action.yml uses
+# --skip-duplicate, so resuming is always safe to repeat.
+
+name: NuGet Publish — Auto-resume
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  resume:
+    permissions:
+      actions: write
+    uses: KiarashMinoo/.github/.github/workflows/reusable-nuget-publish-resume.yml@main
+    with:
+      workflow-file: ci.yml
