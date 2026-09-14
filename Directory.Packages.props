@@ -72,7 +72,7 @@
          parameterless constructor and virtual members specifically for direct test substitution
          (Google's documented pattern) - no custom wrapper interface needed, same reasoning as
          AWSSDK.SQS/AWSSDK.SimpleNotificationService above. -->
-    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.37.0" />
+    <PackageVersion Include="Google.Cloud.PubSub.V1" Version="3.38.0" />
   </ItemGroup>
   <ItemGroup Label="Grpc">
     <!-- Grpc.AspNetCore brings in Grpc.AspNetCore.Server (for MapGrpcService on the host's own
