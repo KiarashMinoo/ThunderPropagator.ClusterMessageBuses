@@ -12,7 +12,7 @@
        accident, since nothing else in the repo family expected this file's local override to
        apply anywhere else. Only the version pin stays local. -->
   <ItemGroup>
-    <PackageVersion Include="$(ThunderPropagatorClusterPackageId)" Version="1.0.1-beta.218" />
+    <PackageVersion Include="$(ThunderPropagatorClusterPackageId)" Version="1.0.1-beta.219" />
   </ItemGroup>
   <ItemGroup Label="Resilience">
     <!-- Transport-agnostic retry/circuit-breaker building block for SharedKernel's

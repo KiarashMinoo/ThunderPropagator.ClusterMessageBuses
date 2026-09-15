@@ -12,6 +12,19 @@ on:
           - beta
           - release
         default: beta
+      publish-mode:
+        description: >
+          NuGet publish mode for this manual run -- 'push' (default, unchanged: pushes
+          directly under this repo's own OIDC identity) or 'queue' (same path an
+          automated run takes: uploads a compressed payload for
+          KiarashMinoo/.github's nuget-queue-relay.yml to pick up instead of pushing
+          here -- lets you test the relay pipeline on demand without waiting for a
+          real push to develop).
+        type: choice
+        options:
+          - push
+          - queue
+        default: push
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +47,16 @@ jobs:
   # Owner=KiarashMinoo, Repository=ThunderPropagator.ClusterMessageBuses, Workflow
   # File=ci.yml. Requires a NUGET_USER repo secret (the nuget.org username the policy
   # is attached to) -- Settings > Secrets and variables > Actions > Secrets.
+  #
+  # Manual vs. automated (added 2026-09-14): a manual workflow_dispatch run pushes
+  # directly here by default (publish-mode: push), same as before this existed. An
+  # automated push-triggered run always queues instead (mode: queue) -- uploads a
+  # compressed payload for KiarashMinoo/.github's nuget-queue-relay.yml to pull and push
+  # on a 20-minute cron, collapsing every automated repo's pushes onto one paced queue
+  # against the shared account-wide nuget.org quota (see nuget-oidc-publish
+  # action.yml's header comment for the full design). A manual run can also opt into
+  # the queue path itself by setting the publish-mode input to 'queue' -- useful for
+  # testing the relay pipeline on demand instead of waiting for a real automated push.
   #
   # ADMIN_PUSH_TOKEN: develop has a classic "Require a pull request before merging"
   # branch protection rule with no usable bypass for the default GITHUB_TOKEN identity
@@ -109,8 +132,18 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: write # queue mode deletes the now-redundant raw pkg-*/symbols-* artifacts it just folded into the payload
     steps:
-      - uses: KiarashMinoo/.github/.github/actions/nuget-oidc-publish@main
+      - name: Push directly
+        if: github.event_name == 'workflow_dispatch' && inputs.publish-mode == 'push'
+        uses: KiarashMinoo/.github/.github/actions/nuget-oidc-publish@main
         with:
           nuget-user: ${{ secrets.NUGET_USER }}
+          nuget-filter-enabled: false
+
+      - name: Queue for relay
+        if: github.event_name != 'workflow_dispatch' || inputs.publish-mode == 'queue'
+        uses: KiarashMinoo/.github/.github/actions/nuget-oidc-publish@main
+        with:
+          mode: queue
           nuget-filter-enabled: false
