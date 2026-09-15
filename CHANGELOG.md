@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.14] — 2026-09-14
+
+### ⚙️ CI / Tooling
+
+- ThunderPropagator.ClusterMessageBuses: restructure CLAUDE.md, bump dependency, add NuGet auto-resume workflow `(ebd7f95)` — Kiarash Minoo
+- ThunderPropagator.ClusterMessageBuses: remove NuGet publish auto-resume workflow `(48d9214)` — Kiarash Minoo
+
 ## [1.0.1-beta.13] — 2026-09-14
 
 ### 📦 Dependencies
