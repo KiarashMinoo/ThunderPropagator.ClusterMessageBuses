@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.15] — 2026-09-15
+
+### ⚙️ CI / Tooling
+
+- ThunderPropagator.ClusterMessageBuses: add manual push/queue choice to NuGet publish workflow `(0facacf)` — Kiarash Minoo
+
 ## [1.0.1-beta.14] — 2026-09-14
 
 ### ⚙️ CI / Tooling
