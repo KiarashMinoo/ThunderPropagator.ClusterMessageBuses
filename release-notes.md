@@ -1,5 +1,5 @@
-## [1.0.1-beta.15] — 2026-09-15
+## [1.0.1-beta.16] — 2026-09-20
 
-### ⚙️ CI / Tooling
+### 🚀 Features
 
-- ThunderPropagator.ClusterMessageBuses: add manual push/queue choice to NuGet publish workflow `(0facacf)` — Kiarash Minoo
+- ThunderPropagator.ClusterMessageBuses: consolidate wire types into SharedKernel, add Swim/Rdma/Srd transports `(5676d28)` — Kiarash Minoo
