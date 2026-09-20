@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.17] — 2026-09-20
+
+### 🚀 Features
+
+- ThunderPropagator.ClusterMessageBuses: itemize dependency-update report, add missing using `(ca4e73c)` — Kiarash Minoo
+
+### 🐛 Bug Fixes
+
+- ThunderPropagator.ClusterMessageBuses: fix all build warnings `(14814d0)` — Kiarash Minoo
+
 ## [1.0.1-beta.16] — 2026-09-20
 
 ### 🚀 Features
