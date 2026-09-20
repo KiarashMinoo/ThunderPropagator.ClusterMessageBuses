@@ -197,6 +197,18 @@ function Get-LatestPackageVersion {
     return $versions | Sort-Object { Get-VersionSortKey $_ } -Descending | Select-Object -First 1
 }
 
+function Test-IsFloatingVersion {
+    # A wildcard pin (e.g. "1.0.1-beta.*", only meaningful with
+    # CentralPackageFloatingVersionsEnabled) already resolves to the latest matching
+    # version on its own at restore time. Comparing it against a concrete resolved
+    # "latest" string would never be equal, so every floating entry would otherwise be
+    # reported as perpetually out of date -- and applying that "update" would silently
+    # convert an intentionally-floating dependency into a static pin. Detected and
+    # special-cased everywhere Current is compared to Latest below.
+    param([string]$Version)
+    return $Version -match '\*'
+}
+
 # ── -VersionOnly: resolve one package's latest version and stop right here ─────
 #    Bypasses Directory.Packages.props / Shared.PackageIds.props entirely -- neither
 #    is needed just to answer "what's the latest version of <id>", and requiring them
@@ -291,11 +303,24 @@ $literalIncludePattern  = '<PackageVersion\s+Include="(?<pkgid>ThunderPropagator
 $byVersionProperty  = [ordered]@{}   # verprop -> list of literal package ids
 $byLiteralEntry     = @()           # one entry per literally-pinned PackageVersion line matched via a "$(XxxPackageId)" Include
 $byLiteralNameEntry = @()           # one entry per literally-pinned PackageVersion line matched via a literal "ThunderPropagator..." Include
+$capturedLiteralIds = @{}           # literalId -> $true, every id actually captured by the loop below -- used by the second
+                                     # loop to tell a genuine duplicate apart from a literal-named entry that merely SHARES
+                                     # its text with a known PackageId. Fixed 2026-09-15: this used to be a check against
+                                     # $packageIdMap.Values instead, which wrongly assumed any id known to
+                                     # Shared.PackageIds.props must already have been captured via the "$(XxxPackageId)"
+                                     # Include form -- true for repos that follow that convention (e.g. ThunderPropagator.Channels'
+                                     # "$(ThunderPropagatorPackageId)"), but false for a repo like ThunderPropagator.Web, whose
+                                     # Directory.Packages.props spells every family package out by literal name instead
+                                     # ("ThunderPropagator.BuildingBlocks$(PackageIdConfigurationSuffix)..."). Every one of
+                                     # those literal-named entries has a matching PackageId property in Shared.PackageIds.props
+                                     # (that's how it's discoverable at all), so the old guard silently skipped nearly the
+                                     # entire family list -- this is the "does not fetch all of the packages" bug.
 
 foreach ($m in [regex]::Matches($propsContent, $propertyIncludePattern)) {
     $propId = $m.Groups['propid'].Value
     if (-not $packageIdMap.ContainsKey($propId)) { continue }   # not a known ThunderPropagator package id
     $literalId = $packageIdMap[$propId]
+    $capturedLiteralIds[$literalId] = $true
 
     if ($m.Groups['verprop'].Success) {
         $verProp = $m.Groups['verprop'].Value
@@ -313,10 +338,11 @@ foreach ($m in [regex]::Matches($propsContent, $propertyIncludePattern)) {
 foreach ($m in [regex]::Matches($propsContent, $literalIncludePattern)) {
     $literalId = $m.Groups['pkgid'].Value.Trim()
     # A literal-Include line can never also match $propertyIncludePattern (Include is
-    # either a bare "$(...)" property reference or literal text, never both) -- this
-    # guard just avoids double-listing a package id as a candidate for the same version
-    # property twice if it somehow already came from packageIdMap above.
-    if ($packageIdMap.Values -contains $literalId) { continue }
+    # either a bare "$(...)" property reference or literal text, never both). Only skip
+    # here if THIS id was actually captured by the loop above -- see $capturedLiteralIds
+    # comment for why checking $packageIdMap.Values instead was wrong.
+    if ($capturedLiteralIds.ContainsKey($literalId)) { continue }
+    $capturedLiteralIds[$literalId] = $true
 
     if ($m.Groups['verprop'].Success) {
         $verProp = $m.Groups['verprop'].Value
@@ -376,6 +402,10 @@ Write-Host ""
 
 $propertyUpdates = @()   # @{ Property; Old; New }
 $literalUpdates  = @()   # @{ PropId; LiteralId; Old; New }
+$allPackages     = @()   # @{ PackageId; Current; Latest; Via } -- every discovered package, whether or not it needs
+                          # updating; Via is the shared version property name, or 'own pin' for an individually-pinned
+                          # entry. Printed as one itemized table below so every package this run found is actually
+                          # visible, not just the ones that happened to need a bump.
 
 foreach ($verProp in $byVersionProperty.Keys) {
     $literalIds = $byVersionProperty[$verProp] | Select-Object -Unique
@@ -411,7 +441,16 @@ foreach ($verProp in $byVersionProperty.Keys) {
         continue
     }
 
-    if ($current -eq $latest) {
+    # Every package pinned via this property is listed individually in the table below,
+    # even though they only ever move together -- the point is full visibility into
+    # exactly what "$verProp" covers, not that each one could be bumped independently.
+    foreach ($c in $candidates) {
+        $allPackages += [pscustomobject]@{ PackageId = $c.PackageId; Current = $current; Latest = $c.Version; Via = $verProp }
+    }
+
+    if (Test-IsFloatingVersion $current) {
+        Write-Ok "  $verProp is floating ($current) -- resolves to latest automatically at restore (currently $latest)."
+    } elseif ($current -eq $latest) {
         Write-Ok "  $verProp is already latest: $current"
     } else {
         Write-Host "  $verProp : $current --> $latest" -ForegroundColor Yellow
@@ -424,7 +463,11 @@ foreach ($entry in $byLiteralEntry) {
     $latest = Get-LatestPackageVersion -PackageId $entry.LiteralId -SourceUrl $Source
     if (-not $latest) { continue }
 
-    if ($entry.Current -eq $latest) {
+    $allPackages += [pscustomobject]@{ PackageId = $entry.LiteralId; Current = $entry.Current; Latest = $latest; Via = 'own pin' }
+
+    if (Test-IsFloatingVersion $entry.Current) {
+        Write-Ok "  $($entry.LiteralId) is floating ($($entry.Current)) -- resolves to latest automatically at restore (currently $latest)."
+    } elseif ($entry.Current -eq $latest) {
         Write-Ok "  $($entry.LiteralId) is already latest: $($entry.Current)"
     } else {
         Write-Host "  $($entry.LiteralId) : $($entry.Current) --> $latest" -ForegroundColor Yellow
@@ -439,7 +482,11 @@ foreach ($entry in $byLiteralNameEntry) {
     $latest = Get-LatestPackageVersion -PackageId $entry.LiteralId -SourceUrl $Source
     if (-not $latest) { continue }
 
-    if ($entry.Current -eq $latest) {
+    $allPackages += [pscustomobject]@{ PackageId = $entry.LiteralId; Current = $entry.Current; Latest = $latest; Via = 'own pin' }
+
+    if (Test-IsFloatingVersion $entry.Current) {
+        Write-Ok "  $($entry.LiteralId) is floating ($($entry.Current)) -- resolves to latest automatically at restore (currently $latest)."
+    } elseif ($entry.Current -eq $latest) {
         Write-Ok "  $($entry.LiteralId) is already latest: $($entry.Current)"
     } else {
         Write-Host "  $($entry.LiteralId) : $($entry.Current) --> $latest" -ForegroundColor Yellow
@@ -448,6 +495,21 @@ foreach ($entry in $byLiteralNameEntry) {
 }
 
 $totalUpdates = $propertyUpdates.Count + $literalUpdates.Count + $literalNameUpdates.Count
+
+# ── Itemized listing: every discovered package, current vs. available ─────────
+# Addresses the ask for full visibility regardless of Check/apply mode or whether an
+# individual package happens to need an update -- floating (wildcard-pinned) entries are
+# clearly labeled rather than silently hidden or misreported as needing an update.
+
+Write-Host ""
+Write-Host "Discovered ThunderPropagator packages ($($allPackages.Count)):" -ForegroundColor White
+$allPackages | Sort-Object PackageId | ForEach-Object {
+    $floating = Test-IsFloatingVersion $_.Current
+    $upToDate = (-not $floating) -and ($_.Current -eq $_.Latest)
+    $label    = if ($floating) { 'floating' } elseif ($upToDate) { 'up to date' } else { 'UPDATE AVAILABLE' }
+    $color    = if ($floating -or $upToDate) { 'DarkGray' } else { 'Yellow' }
+    Write-Host ("  {0,-65} {1,-18} -> {2,-18} [{3}] (via {4})" -f $_.PackageId, $_.Current, $_.Latest, $label, $_.Via) -ForegroundColor $color
+}
 
 # ── Check mode: report only ───────────────────────────────────────────────────
 
