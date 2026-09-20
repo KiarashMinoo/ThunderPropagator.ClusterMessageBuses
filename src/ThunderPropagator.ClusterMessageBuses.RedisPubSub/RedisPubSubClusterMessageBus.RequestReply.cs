@@ -130,6 +130,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyChannelName = RedisChannelNaming.ReplyChannel(_options.ChannelPrefix, request.ReplyToNodeEndpoint);
 
             try

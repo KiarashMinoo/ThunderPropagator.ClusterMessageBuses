@@ -29,7 +29,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Swim
     /// </para>
     /// <para>
     /// <b>Suspicion/incarnation state machine.</b> <see cref="MarkSuspect"/> and
-    /// <see cref="ExpireSuspectsAsync"/> only ever gossip a state transition when
+    /// <see cref="ExpireSuspects"/> only ever gossip a state transition when
     /// <see cref="SwimMembershipTable.Merge"/> reports it actually changed something -- redundant
     /// re-suspicion of an already-Suspect host at the same incarnation is a no-op, exactly matching
     /// the precedence rule documented on <see cref="SwimMembershipUpdate.Incarnation"/>. Self-refutation

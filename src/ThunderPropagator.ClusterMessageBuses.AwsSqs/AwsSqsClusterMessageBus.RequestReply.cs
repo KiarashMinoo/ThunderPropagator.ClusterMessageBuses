@@ -135,6 +135,7 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyQueueName = AwsSqsResourceNaming.ReplyQueue(_options.ResourcePrefix, request.ReplyToNodeEndpoint);
 
             try

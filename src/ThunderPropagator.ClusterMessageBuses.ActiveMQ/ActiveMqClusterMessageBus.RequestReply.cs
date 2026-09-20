@@ -140,6 +140,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ActiveMQ
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyQueueName = ActiveMqTopicNaming.ReplyQueue(_options.TopicPrefix, request.ReplyToNodeEndpoint);
 
             await _publishLock.WaitAsync(cancellationToken).ConfigureAwait(false);

@@ -157,6 +157,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Pulsar
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyTopic = PulsarTopicNaming.ReplyTopic(_options.TopicPrefix, request.ReplyToNodeEndpoint);
 
             try

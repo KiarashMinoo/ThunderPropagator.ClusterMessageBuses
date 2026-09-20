@@ -143,6 +143,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyQueue = RabbitMqTopicNaming.ReplyQueue(_options.ExchangePrefix, request.ReplyToNodeEndpoint);
             var body = Encoding.UTF8.GetBytes(response.ToNJson());
 

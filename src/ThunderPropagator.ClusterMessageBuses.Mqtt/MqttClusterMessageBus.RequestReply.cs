@@ -158,6 +158,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyTopic = MqttTopicNaming.ReplyTopic(_options.TopicPrefix, request.ReplyToNodeEndpoint);
 
             try

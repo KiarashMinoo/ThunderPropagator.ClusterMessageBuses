@@ -63,6 +63,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Rdma
         /// core's <c>AddStaticClusterNodeDiscovery(...)</c> alongside this call. Also requires a
         /// <see cref="ThunderPropagator.Infrastructure.Channels.ChannelManager"/> to already be
         /// registered (added automatically by <c>AddThunderPropagator</c>).
+        /// </para>
         /// <para>
         /// To use a different transport instead, register your own <see cref="IClusterMessageBus"/>
         /// with <c>services.AddSingleton&lt;IClusterMessageBus, TImpl&gt;()</c> -- this method

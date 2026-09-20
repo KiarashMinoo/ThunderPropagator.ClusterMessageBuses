@@ -31,7 +31,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
 
         /// <summary>
         /// Byte-oriented counterpart to <see cref="FanOutCall"/> -- see <c>ClusterByteMessage</c>'s
-        /// own doc comment. Nullable, and <paramref name="byteFanOutClient"/> is an optional trailing
+        /// own doc comment. Nullable, and <c>byteFanOutClient</c> is an optional trailing
         /// constructor parameter (rather than inserted alongside the other two clients), so existing
         /// call sites/tests that construct a <see cref="GrpcPeerConnection"/> without one — exercising
         /// only the pre-existing <c>ClusterFanOutMessage</c>-based surface — keep compiling unchanged.

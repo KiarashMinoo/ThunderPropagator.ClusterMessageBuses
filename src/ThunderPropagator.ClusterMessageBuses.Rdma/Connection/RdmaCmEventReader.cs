@@ -23,7 +23,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Rdma
         /// </summary>
         /// <remarks>
         /// <c>rdma_get_cm_event</c> is a blocking native call with no way to interrupt it via a
-        /// managed <see cref="CancellationToken"/> -- if <paramref name="cancellationToken"/> is
+        /// managed <see cref="CancellationToken"/> -- if the caller's <c>cancellationToken</c> is
         /// cancelled (or a timeout elapses via <see cref="WaitForAsync"/>) while this call is
         /// in-flight, the underlying background thread-pool thread stays blocked in native code
         /// until an event actually arrives or the event channel is destroyed. Destroying the event

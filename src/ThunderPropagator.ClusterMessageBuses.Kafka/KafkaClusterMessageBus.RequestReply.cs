@@ -173,6 +173,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(request.ReplyToNodeEndpoint);
             var replyTopic = KafkaTopicNaming.ReplyTopic(_options.TopicPrefix, request.ReplyToNodeEndpoint);
 
             try
