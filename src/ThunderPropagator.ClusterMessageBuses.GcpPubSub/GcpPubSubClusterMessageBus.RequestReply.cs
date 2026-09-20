@@ -10,9 +10,9 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
     /// <summary>
     /// Shared request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="GcpPubSubClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="ClusterRequestEnvelope"/>
     /// to the target's request topic (built from its own <c>NodeEndpoint</c>) and awaits a matching
-    /// <see cref="GcpPubSubClusterResponseEnvelope"/> on this node's own reply subscription (polled by
+    /// <see cref="ClusterResponseEnvelope"/> on this node's own reply subscription (polled by
     /// <see cref="GcpPubSubClusterMessageBus.EnsureInitializedAsync"/>'s background loop). Answering
     /// side: that same initialization also starts the request-subscription poller, which delivers into
     /// <see cref="HandleRequestDeliveryAsync"/>, dispatching to <see cref="BuildResponseAsync"/>,
@@ -30,9 +30,9 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<GcpPubSubClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            GcpPubSubClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -40,11 +40,8 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<GcpPubSubClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate GcpPubSub cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -89,17 +86,17 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal async Task HandleRequestDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            GcpPubSubClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = body.FromNJson<GcpPubSubClusterRequestEnvelope>();
+                request = body.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -116,10 +113,10 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal Task HandleReplyDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            GcpPubSubClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = body.FromNJson<GcpPubSubClusterResponseEnvelope>();
+                response = body.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -137,22 +134,19 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         /// Completes the pending <see cref="SendRequestAsync"/> call matching
         /// <paramref name="response"/>'s correlation id, if one is still waiting.
         /// </summary>
-        internal bool TryCompletePendingRequest(GcpPubSubClusterResponseEnvelope response)
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response)
         {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
+            return _pendingRequests.TryComplete(response.CorrelationId, () => response);
         }
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>GcpPubSubClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and publishes
         /// the result to the requester's own reply topic — derived from
-        /// <see cref="GcpPubSubClusterRequestEnvelope.ReplyToNodeEndpoint"/> rather than trusting a
+        /// <see cref="ClusterRequestEnvelope.ReplyToNodeEndpoint"/> rather than trusting a
         /// destination supplied on the wire.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(GcpPubSubClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyTopicName = new TopicName(_options.ProjectId, GcpPubSubResourceNaming.ReplyTopicId(_options.ResourcePrefix, request.ReplyToNodeEndpoint));
@@ -172,22 +166,23 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
             }
         }
 
-        internal async Task<GcpPubSubClusterResponseEnvelope> BuildResponseAsync(GcpPubSubClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    GcpPubSubClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    GcpPubSubClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    GcpPubSubClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new GcpPubSubClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new GcpPubSubClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

@@ -62,8 +62,12 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
 
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<RedisPubSubClusterResponseEnvelope>> _pendingRequests = new();
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
+
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
 
         // Same constructor-injection-for-testability shape as every other broker transport in this
@@ -74,7 +78,8 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             ThunderPropagator.Application.Channels.Cluster.ClusterConfiguration clusterConfiguration,
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
-            Func<CancellationToken, Task<IConnectionMultiplexer>>? connectionFactory = null)
+            Func<CancellationToken, Task<IConnectionMultiplexer>>? connectionFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -84,6 +89,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<RedisPubSubClusterMessageBus>();
             _connectionFactory = connectionFactory ?? DefaultConnectionFactoryAsync;
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -140,10 +146,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves as channels
             // unsubscribe — but if the whole bus is torn down first (e.g. host shutdown) without
@@ -158,6 +161,11 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             if (_subscriber is not null)

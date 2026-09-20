@@ -9,9 +9,9 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
     /// <summary>
     /// Shared broker-native request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> sends an <see cref="AwsSqsClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="ClusterRequestEnvelope"/>
     /// to the target's request queue (resolved via <c>GetQueueUrlAsync</c>) and awaits a matching
-    /// <see cref="AwsSqsClusterResponseEnvelope"/> on this node's own reply queue (polled by
+    /// <see cref="ClusterResponseEnvelope"/> on this node's own reply queue (polled by
     /// <see cref="AwsSqsClusterMessageBus.EnsureInitializedAsync"/>'s background loop). Answering
     /// side: that same initialization also starts the request-queue poller, which delivers into
     /// <see cref="HandleRequestDeliveryAsync"/>, dispatching to <see cref="BuildResponseAsync"/>,
@@ -22,9 +22,9 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<AwsSqsClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            AwsSqsClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -32,11 +32,8 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<AwsSqsClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate AwsSqs cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -76,17 +73,17 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal async Task HandleRequestDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            AwsSqsClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = body.FromNJson<AwsSqsClusterRequestEnvelope>();
+                request = body.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -103,10 +100,10 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal Task HandleReplyDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            AwsSqsClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = body.FromNJson<AwsSqsClusterResponseEnvelope>();
+                response = body.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -124,21 +121,18 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         /// Completes the pending <see cref="SendRequestAsync"/> call matching
         /// <paramref name="response"/>'s correlation id, if one is still waiting.
         /// </summary>
-        internal bool TryCompletePendingRequest(AwsSqsClusterResponseEnvelope response)
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response)
         {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
+            return _pendingRequests.TryComplete(response.CorrelationId, () => response);
         }
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>AwsSqsClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and sends the
-        /// result to the requester's own reply queue — derived from <see cref="AwsSqsClusterRequestEnvelope.ReplyToNodeEndpoint"/>
+        /// result to the requester's own reply queue — derived from <see cref="ClusterRequestEnvelope.ReplyToNodeEndpoint"/>
         /// rather than trusting a queue URL supplied on the wire.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(AwsSqsClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyQueueName = AwsSqsResourceNaming.ReplyQueue(_options.ResourcePrefix, request.ReplyToNodeEndpoint);
@@ -158,22 +152,23 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             }
         }
 
-        internal async Task<AwsSqsClusterResponseEnvelope> BuildResponseAsync(AwsSqsClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    AwsSqsClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    AwsSqsClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    AwsSqsClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new AwsSqsClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new AwsSqsClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

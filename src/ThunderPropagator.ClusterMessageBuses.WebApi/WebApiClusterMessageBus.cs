@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ThunderPropagator.Application.Channels.Cluster;
@@ -63,8 +62,17 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
         private volatile bool _initialized;
         private IWebApiClusterListener? _listener;
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+
+        /// <summary>
+        /// Answers this node's own <c>bytesnapshot/{channelKey}</c> route -- see
+        /// <see cref="IClusterByteSnapshotProvider"/>'s own doc comment. Left unregistered by a
+        /// channel-based consumer (nothing here requires it); a non-channel consumer like
+        /// ThunderPropagator.Web registers its own implementation.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -76,7 +84,8 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
             IClusterNodeDiscovery discovery,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IWebApiClusterListener>>? listenerFactory = null,
-            IWebApiClusterHttpClient? httpClient = null)
+            IWebApiClusterHttpClient? httpClient = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -88,6 +97,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
             _logger = loggerFactory.CreateLogger<WebApiClusterMessageBus>();
             _listenerFactory = listenerFactory ?? DefaultListenerFactoryAsync;
             _httpClient = httpClient ?? CreateDefaultHttpClient();
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -159,6 +169,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             if (_listener is not null)
             {

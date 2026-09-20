@@ -3,20 +3,21 @@ using System.Text;
 using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.WebSocket;
 
 namespace ThunderPropagator.UnitTests.WebSocket;
 
 public class WebSocketClusterMessageBusRequestReplyTests
 {
-    private static WebSocketClusterRequestEnvelope CapturePublishedRequest(System.Net.WebSockets.WebSocket socket)
+    private static ClusterRequestEnvelope CapturePublishedRequest(System.Net.WebSockets.WebSocket socket)
     {
         var call = socket.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(System.Net.WebSockets.WebSocket.SendAsync));
         var segment = (ArraySegment<byte>)call.GetArguments()[0]!;
-        var frame = Encoding.UTF8.GetString(segment).FromNJson<WebSocketClusterFrame>()!;
+        var frame = Encoding.UTF8.GetString(segment).FromNJson<ClusterFrame>()!;
 
-        return frame.PayloadJson.FromNJson<WebSocketClusterRequestEnvelope>()!;
+        return frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
     }
 
     [Fact]
@@ -25,7 +26,7 @@ public class WebSocketClusterMessageBusRequestReplyTests
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), WebSocketClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -37,7 +38,7 @@ public class WebSocketClusterMessageBusRequestReplyTests
 
         using var cts = new CancellationTokenSource();
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), WebSocketClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
 
         cts.Cancel();
 
@@ -55,12 +56,12 @@ public class WebSocketClusterMessageBusRequestReplyTests
             outboundSocketFactory: WebSocketClusterMessageBusTestHelpers.OutboundSocketFactoryReturning(peerSocket));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), WebSocketClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(peerSocket);
         var expectedPayload = "[{\"SubscriptionId\":\"sub-9\"}]";
 
-        var completed = bus.TryCompletePendingRequest(new WebSocketClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
 
         completed.Should().BeTrue();
 
@@ -78,11 +79,11 @@ public class WebSocketClusterMessageBusRequestReplyTests
             outboundSocketFactory: WebSocketClusterMessageBusTestHelpers.OutboundSocketFactoryReturning(peerSocket));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), WebSocketClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(peerSocket);
 
-        var completed = bus.TryCompletePendingRequest(new WebSocketClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
         completed.Should().BeTrue();
 
         var act = async () => await task;
@@ -95,7 +96,7 @@ public class WebSocketClusterMessageBusRequestReplyTests
     {
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new WebSocketClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -106,7 +107,7 @@ public class WebSocketClusterMessageBusRequestReplyTests
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync();
 
         var sendResponseCalled = false;
-        Func<WebSocketClusterFrame, CancellationToken, Task> sendResponse = (_, _) => { sendResponseCalled = true; return Task.CompletedTask; };
+        Func<ClusterFrame, CancellationToken, Task> sendResponse = (_, _) => { sendResponseCalled = true; return Task.CompletedTask; };
 
         var act = async () => await bus.HandleRequestFrameAsync("not json", sendResponse, CancellationToken.None);
 
@@ -119,17 +120,17 @@ public class WebSocketClusterMessageBusRequestReplyTests
     {
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync();
 
-        WebSocketClusterFrame? sentFrame = null;
-        Func<WebSocketClusterFrame, CancellationToken, Task> sendResponse = (frame, _) => { sentFrame = frame; return Task.CompletedTask; };
+        ClusterFrame? sentFrame = null;
+        Func<ClusterFrame, CancellationToken, Task> sendResponse = (frame, _) => { sentFrame = frame; return Task.CompletedTask; };
 
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
 
         await bus.HandleRequestFrameAsync(request.ToNJson(), sendResponse, CancellationToken.None);
 
         sentFrame.Should().NotBeNull();
-        sentFrame!.Kind.Should().Be(WebSocketClusterFrameKind.Response);
+        sentFrame!.Kind.Should().Be(ClusterFrameKind.Response);
 
-        var response = sentFrame.PayloadJson.FromNJson<WebSocketClusterResponseEnvelope>();
+        var response = sentFrame.PayloadJson.FromNJson<ClusterResponseEnvelope>();
         response!.CorrelationId.Should().Be(request.CorrelationId);
     }
 

@@ -3,17 +3,18 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.Kafka;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.Kafka;
 
 public class KafkaClusterMessageBusRequestReplyTests
 {
-    private static IProducer<string, string> CreateSucceedingProducer(Action<KafkaClusterRequestEnvelope>? onProduced = null)
+    private static IProducer<string, string> CreateSucceedingProducer(Action<ClusterRequestEnvelope>? onProduced = null)
     {
         var producer = Substitute.For<IProducer<string, string>>();
         producer.ProduceAsync(
                 Arg.Any<string>(),
-                Arg.Do<Message<string, string>>(m => onProduced?.Invoke(m.Value.FromNJson<KafkaClusterRequestEnvelope>()!)),
+                Arg.Do<Message<string, string>>(m => onProduced?.Invoke(m.Value.FromNJson<ClusterRequestEnvelope>()!)),
                 Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<DeliveryResult<string, string>>(null!));
         return producer;
@@ -26,7 +27,7 @@ public class KafkaClusterMessageBusRequestReplyTests
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(producer: producer, requestTimeout: TimeSpan.FromMilliseconds(100));
 
         var act = () => bus.SendRequestAsync(
-            new Uri("https://leader:5000/"), KafkaClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://leader:5000/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -40,7 +41,7 @@ public class KafkaClusterMessageBusRequestReplyTests
         using var callerCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         var act = () => bus.SendRequestAsync(
-            new Uri("https://leader:5000/"), KafkaClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, callerCts.Token);
+            new Uri("https://leader:5000/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, callerCts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -48,18 +49,18 @@ public class KafkaClusterMessageBusRequestReplyTests
     [Fact]
     public async Task SendRequestAsync_MatchingReplyArrives_ReturnsIt()
     {
-        KafkaClusterRequestEnvelope? sentRequest = null;
+        ClusterRequestEnvelope? sentRequest = null;
         var producer = CreateSucceedingProducer(request => sentRequest = request);
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(producer: producer, requestTimeout: TimeSpan.FromSeconds(5));
 
         var sendTask = bus.SendRequestAsync(
-            new Uri("https://leader:5000/"), KafkaClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://leader:5000/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         // ProduceAsync (and therefore the Arg.Do capture) runs synchronously inside SendRequestAsync
         // before it ever awaits the reply, so by the time SendRequestAsync itself has yielded control
         // back here, sentRequest is already populated with the correlation id to reply to.
         sentRequest.Should().NotBeNull();
-        var completed = bus.TryCompletePendingRequest(new KafkaClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, "{\"answer\":true}"));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, "{\"answer\":true}"));
         completed.Should().BeTrue();
 
         var response = await sendTask;
@@ -71,15 +72,15 @@ public class KafkaClusterMessageBusRequestReplyTests
     [Fact]
     public async Task SendRequestAsync_PeerRejectsTheRequest_ThrowsInvalidOperationExceptionWithThePeersErrorMessage()
     {
-        KafkaClusterRequestEnvelope? sentRequest = null;
+        ClusterRequestEnvelope? sentRequest = null;
         var producer = CreateSucceedingProducer(request => sentRequest = request);
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(producer: producer, requestTimeout: TimeSpan.FromSeconds(5));
 
         var sendTask = bus.SendRequestAsync(
-            new Uri("https://leader:5000/"), KafkaClusterRequestKind.RestoreSnapshot, "SomeChannel", null, null, CancellationToken.None);
+            new Uri("https://leader:5000/"), ClusterRequestKind.RestoreSnapshot, "SomeChannel", null, null, CancellationToken.None);
 
         sentRequest.Should().NotBeNull();
-        bus.TryCompletePendingRequest(new KafkaClusterResponseEnvelope(sentRequest!.CorrelationId, false, "channel not found", null));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest!.CorrelationId, false, "channel not found", null));
 
         var act = () => sendTask;
 
@@ -91,7 +92,7 @@ public class KafkaClusterMessageBusRequestReplyTests
     {
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus();
 
-        var completed = bus.TryCompletePendingRequest(new KafkaClusterResponseEnvelope(Guid.NewGuid(), true, null, null));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null));
 
         completed.Should().BeFalse();
     }

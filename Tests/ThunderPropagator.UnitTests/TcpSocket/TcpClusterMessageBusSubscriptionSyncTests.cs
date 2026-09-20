@@ -3,6 +3,7 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.TcpSocket;
 
 namespace ThunderPropagator.UnitTests.TcpSocket;
@@ -29,9 +30,9 @@ public class TcpClusterMessageBusSubscriptionSyncTests
         await bus.PublishAsync(channelKey, subscriptionEvent);
 
         await peerConnection.Received(1).SendFrameAsync(
-            Arg.Is<TcpClusterFrame>(f => f.Kind == TcpClusterFrameKind.SubscriptionEvent &&
-                f.PayloadJson.FromNJson<TcpSubscriptionEventPayload>()!.ChannelKey == channelKey &&
-                f.PayloadJson.FromNJson<TcpSubscriptionEventPayload>()!.Event.OriginId == bus.SelfId),
+            Arg.Is<ClusterFrame>(f => f.Kind == ClusterFrameKind.SubscriptionEvent &&
+                f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>()!.ChannelKey == channelKey &&
+                f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>()!.Message.OriginId == bus.SelfId),
             Arg.Any<CancellationToken>());
     }
 
@@ -61,7 +62,7 @@ public class TcpClusterMessageBusSubscriptionSyncTests
         var channelKey = Guid.NewGuid();
         await bus.SubscribeAsync(channelKey, handler);
 
-        var payload = new TcpSubscriptionEventPayload(channelKey, CreateEvent(bus.SelfId));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(bus.SelfId));
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -80,7 +81,7 @@ public class TcpClusterMessageBusSubscriptionSyncTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignEvent = CreateEvent(Guid.NewGuid());
-        var payload = new TcpSubscriptionEventPayload(channelKey, foreignEvent);
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, foreignEvent);
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -93,7 +94,7 @@ public class TcpClusterMessageBusSubscriptionSyncTests
     {
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var payload = new TcpSubscriptionEventPayload(Guid.NewGuid(), CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(Guid.NewGuid(), CreateEvent(Guid.NewGuid()));
 
         var act = async () => await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -122,7 +123,7 @@ public class TcpClusterMessageBusSubscriptionSyncTests
         var subscription = await bus.SubscribeAsync(channelKey, handler);
         await subscription.DisposeAsync();
 
-        var payload = new TcpSubscriptionEventPayload(channelKey, CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(Guid.NewGuid()));
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
         invoked.Should().BeFalse("a disposed subscription must not receive further deliveries");

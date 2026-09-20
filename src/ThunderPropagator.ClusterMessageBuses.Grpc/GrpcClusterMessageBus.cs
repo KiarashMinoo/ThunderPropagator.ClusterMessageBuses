@@ -68,8 +68,17 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
         private readonly ClusterConnectionCache<GrpcPeerConnection> _outboundConnections;
         private readonly ConcurrentDictionary<string, byte> _maintainedPeers = new(StringComparer.Ordinal);
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+
+        /// <summary>
+        /// Answers this node's own <c>ClusterSnapshot.PullSnapshotBytes</c> RPC -- see
+        /// <see cref="IClusterByteSnapshotProvider"/>'s own doc comment. Left unregistered by a
+        /// channel-based consumer (nothing here requires it); a non-channel consumer registers its
+        /// own implementation.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         // The most recent subscription-sync event this node has itself published per channel,
         // replayed to a peer whenever its subscription-sync stream (re)connects, so a peer that
@@ -92,7 +101,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IGrpcClusterHost>>? hostFactory = null,
             Func<Uri, CancellationToken, Task<GrpcPeerConnection>>? peerConnectionFactory = null,
-            Func<Uri, CancellationToken, Task<GrpcUnaryClients>>? unaryClientsFactory = null)
+            Func<Uri, CancellationToken, Task<GrpcUnaryClients>>? unaryClientsFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -107,6 +117,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             _unaryClientsFactory = unaryClientsFactory ?? DefaultUnaryClientsFactoryAsync;
             _outboundConnections = new ClusterConnectionCache<GrpcPeerConnection>(
                 (key, cancellationToken) => _peerConnectionFactory(new Uri(key), cancellationToken));
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             if (_options.FallbackToHttp)
             {
@@ -139,8 +150,9 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             var channel = GrpcChannel.ForAddress(peerEndpoint, BuildChannelOptions());
             var fanOutClient = new ClusterFanOut.ClusterFanOutClient(channel);
             var subscriptionSyncClient = new ClusterSubscriptionSync.ClusterSubscriptionSyncClient(channel);
+            var byteFanOutClient = new ClusterByteFanOut.ClusterByteFanOutClient(channel);
 
-            var connection = new GrpcPeerConnection(fanOutClient, subscriptionSyncClient, cancellationToken, channel);
+            var connection = new GrpcPeerConnection(fanOutClient, subscriptionSyncClient, cancellationToken, channel, byteFanOutClient);
             return await Task.FromResult(connection).ConfigureAwait(false);
         }
 
@@ -186,6 +198,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             app.MapGrpcService<ClusterSubscriptionSyncGrpcService>();
             app.MapGrpcService<ClusterSnapshotGrpcService>();
             app.MapGrpcService<ClusterSubscriptionFetchGrpcService>();
+            app.MapGrpcService<ClusterByteFanOutGrpcService>();
 
             IGrpcClusterHost host = new AspNetCoreGrpcClusterHost(app);
             return Task.FromResult(host);
@@ -299,6 +312,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             await _outboundConnections.DisposeAsync().ConfigureAwait(false);
 

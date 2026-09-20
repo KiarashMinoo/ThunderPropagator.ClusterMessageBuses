@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 {
@@ -25,9 +26,9 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
     internal sealed partial class UdpClusterMessageBus
     {
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<UdpClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetPeerEndpoint,
-            UdpClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -36,56 +37,34 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
             var remoteEndpoint = await _peerEndpointResolver(targetPeerEndpoint, cancellationToken).ConfigureAwait(false);
-            var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
-            var frame = new UdpClusterFrame(UdpClusterFrameKind.Request, request.ToNJson());
-            var tcs = new TaskCompletionSource<UdpClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate UDP cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
+            var frame = new ClusterFrame(ClusterFrameKind.Request, request.ToNJson());
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
-                var deadline = DateTime.UtcNow + _options.RequestTimeout;
+                var response = await ResendOnTimerRequestCoordinator.SendWithResendAsync(
+                    tcs,
+                    ct => SendFrameAsync(frame, remoteEndpoint, ct),
+                    _options.ResendInterval,
+                    _options.RequestTimeout,
+                    $"UDP cluster request '{kind}' to '{targetPeerEndpoint.Host}' timed out after {_options.RequestTimeout}.",
+                    cancellationToken).ConfigureAwait(false);
 
-                while (true)
-                {
-                    await SendFrameAsync(frame, remoteEndpoint, cancellationToken).ConfigureAwait(false);
+                if (!response.Success)
+                    throw new InvalidOperationException($"UDP cluster request '{kind}' to '{targetPeerEndpoint.Host}' was rejected: {response.ErrorMessage}");
 
-                    var remaining = deadline - DateTime.UtcNow;
-                    if (remaining <= TimeSpan.Zero)
-                        throw new TimeoutException($"UDP cluster request '{kind}' to '{targetPeerEndpoint.Host}' timed out after {_options.RequestTimeout}.");
-
-                    var waitTime = remaining < _options.ResendInterval ? remaining : _options.ResendInterval;
-                    using var waitCts = new CancellationTokenSource(waitTime);
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, waitCts.Token);
-
-                    var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
-                    var completed = await Task.WhenAny(tcs.Task, delayTask).ConfigureAwait(false);
-
-                    if (completed == tcs.Task)
-                    {
-                        var response = await tcs.Task.ConfigureAwait(false);
-                        if (!response.Success)
-                            throw new InvalidOperationException($"UDP cluster request '{kind}' to '{targetPeerEndpoint.Host}' was rejected: {response.ErrorMessage}");
-
-                        return response;
-                    }
-
-                    // The delay "won" the race — either this attempt's resend interval elapsed (loop
-                    // around and resend) or the caller's own cancellationToken fired (propagate
-                    // immediately rather than resending forever).
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
+                return response;
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>
         /// Answers an inbound request datagram by dispatching to <see cref="BuildResponseAsync"/> and
-        /// invoking <paramref name="sendResponseAsync"/> with the resulting <see cref="UdpClusterFrame"/>
+        /// invoking <paramref name="sendResponseAsync"/> with the resulting <see cref="ClusterFrame"/>
         /// and the <paramref name="remoteEndpoint"/> the request actually arrived from. Internal
         /// (rather than private) so tests can drive it directly with a raw payload and a capturing
         /// delegate instead of a real socket.
@@ -93,13 +72,13 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         internal async Task HandleRequestFrameAsync(
             string payload,
             IPEndPoint remoteEndpoint,
-            Func<UdpClusterFrame, IPEndPoint, CancellationToken, Task> sendResponseAsync,
+            Func<ClusterFrame, IPEndPoint, CancellationToken, Task> sendResponseAsync,
             CancellationToken cancellationToken)
         {
-            UdpClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payload.FromNJson<UdpClusterRequestEnvelope>();
+                request = payload.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -111,7 +90,7 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
                 return;
 
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
-            var responseFrame = new UdpClusterFrame(UdpClusterFrameKind.Response, response.ToNJson());
+            var responseFrame = new ClusterFrame(ClusterFrameKind.Response, response.ToNJson());
 
             try
             {
@@ -126,10 +105,10 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal Task HandleResponseDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            UdpClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = payload.FromNJson<UdpClusterResponseEnvelope>();
+                response = payload.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -150,30 +129,28 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         /// response) — only the first matching response to arrive completes the pending call; later
         /// duplicates simply find no pending entry left and are dropped.
         /// </summary>
-        internal bool TryCompletePendingRequest(UdpClusterResponseEnvelope response)
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response)
         {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
+            return _pendingRequests.TryComplete(response.CorrelationId, () => response);
         }
 
-        internal async Task<UdpClusterResponseEnvelope> BuildResponseAsync(UdpClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    UdpClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    UdpClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    UdpClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new UdpClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new UdpClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

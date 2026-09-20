@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -41,8 +40,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
 
         public override Task<IAsyncDisposable> SubscribeAsync(Guid channelKey, Func<ClusterSubscriptionEvent, CancellationToken, Task> onEvent, CancellationToken cancellationToken = default)
         {
-            _subscriptionEventHandlers[channelKey] = onEvent;
-            return Task.FromResult<IAsyncDisposable>(new SubscriptionEventSubscription(_subscriptionEventHandlers, channelKey));
+            return Task.FromResult(_subscriptionEventHandlers.Register(channelKey, onEvent));
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
@@ -62,34 +60,13 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
             if (subscriptionEvent is null || subscriptionEvent.OriginId == _selfId)
                 return;
 
-            if (!_subscriptionEventHandlers.TryGetValue(channelKey, out var handler))
-                return;
-
             try
             {
-                await handler(subscriptionEvent, cancellationToken).ConfigureAwait(false);
+                await _subscriptionEventHandlers.InvokeAsync(channelKey, subscriptionEvent, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
                 Log.SubscriptionEventHandlerFaulted(_logger, exception);
-            }
-        }
-
-        private sealed class SubscriptionEventSubscription : IAsyncDisposable
-        {
-            private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _handlers;
-            private readonly Guid _channelKey;
-
-            internal SubscriptionEventSubscription(ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> handlers, Guid channelKey)
-            {
-                _handlers = handlers;
-                _channelKey = channelKey;
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                _handlers.TryRemove(_channelKey, out _);
-                return ValueTask.CompletedTask;
             }
         }
 

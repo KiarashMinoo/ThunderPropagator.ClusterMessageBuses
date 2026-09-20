@@ -3,18 +3,19 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.ActiveMQ;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.ActiveMQ;
 
 public class ActiveMqClusterMessageBusRequestReplyTests
 {
-    private static ActiveMqClusterRequestEnvelope CapturePublishedRequest(IMessageProducer producer)
+    private static ClusterRequestEnvelope CapturePublishedRequest(IMessageProducer producer)
     {
         var call = producer.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(IMessageProducer.SendAsync));
         var textMessage = (ITextMessage)call.GetArguments()[1]!;
 
-        return textMessage.Text!.FromNJson<ActiveMqClusterRequestEnvelope>()!;
+        return textMessage.Text!.FromNJson<ClusterRequestEnvelope>()!;
     }
 
     [Fact]
@@ -23,7 +24,7 @@ public class ActiveMqClusterMessageBusRequestReplyTests
         await using var bus = await ActiveMqClusterMessageBusTestHelpers.CreateBusAsync(requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), ActiveMqClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -35,7 +36,7 @@ public class ActiveMqClusterMessageBusRequestReplyTests
 
         using var cts = new CancellationTokenSource();
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), ActiveMqClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
 
         cts.Cancel();
 
@@ -53,12 +54,12 @@ public class ActiveMqClusterMessageBusRequestReplyTests
         var producer = await sessions[0].CreateProducerAsync();
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), ActiveMqClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(producer);
         var expectedPayload = "[{\"SubscriptionId\":\"sub-9\"}]";
 
-        var completed = bus.TryCompletePendingRequest(new ActiveMqClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
 
         completed.Should().BeTrue();
 
@@ -76,11 +77,11 @@ public class ActiveMqClusterMessageBusRequestReplyTests
         var producer = await sessions[0].CreateProducerAsync();
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), ActiveMqClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(producer);
 
-        var completed = bus.TryCompletePendingRequest(new ActiveMqClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
         completed.Should().BeTrue();
 
         var act = async () => await task;
@@ -93,7 +94,7 @@ public class ActiveMqClusterMessageBusRequestReplyTests
     {
         await using var bus = await ActiveMqClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new ActiveMqClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }

@@ -3,6 +3,7 @@ using System.Text;
 using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.WebSocket;
 
 namespace ThunderPropagator.UnitTests.WebSocket;
@@ -16,7 +17,7 @@ public class WebSocketPeerConnectionTests
         return socket;
     }
 
-    private static void WriteFrameToSegment(WebSocketClusterFrame frame, ArraySegment<byte> segment, out int length)
+    private static void WriteFrameToSegment(ClusterFrame frame, ArraySegment<byte> segment, out int length)
     {
         var bytes = Encoding.UTF8.GetBytes(frame.ToNJson());
         Array.Copy(bytes, 0, segment.Array!, segment.Offset, bytes.Length);
@@ -28,12 +29,12 @@ public class WebSocketPeerConnectionTests
     {
         var socket = WebSocketClusterMessageBusTestHelpers.CreateSocketSubstitute();
         var connection = new WebSocketPeerConnection(socket, 1024);
-        var frame = new WebSocketClusterFrame(WebSocketClusterFrameKind.FanOut, "{\"hello\":1}");
+        var frame = new ClusterFrame(ClusterFrameKind.FanOut, "{\"hello\":1}");
 
         await connection.SendFrameAsync(frame, CancellationToken.None);
 
         await socket.Received(1).SendAsync(
-            Arg.Is<ArraySegment<byte>>(segment => Encoding.UTF8.GetString(segment).FromNJson<WebSocketClusterFrame>()!.PayloadJson == frame.PayloadJson),
+            Arg.Is<ArraySegment<byte>>(segment => Encoding.UTF8.GetString(segment).FromNJson<ClusterFrame>()!.PayloadJson == frame.PayloadJson),
             WebSocketMessageType.Text,
             true,
             Arg.Any<CancellationToken>());
@@ -42,7 +43,7 @@ public class WebSocketPeerConnectionTests
     [Fact]
     public async Task ReceiveFramesAsync_SingleFragmentMessage_YieldsTheDeserializedFrame()
     {
-        var frame = new WebSocketClusterFrame(WebSocketClusterFrameKind.FanOut, "{\"a\":1}");
+        var frame = new ClusterFrame(ClusterFrameKind.FanOut, "{\"a\":1}");
         var callCount = 0;
 
         var socket = CreateOpenSocketSubstitute();
@@ -61,21 +62,21 @@ public class WebSocketPeerConnectionTests
 
         var connection = new WebSocketPeerConnection(socket, 4096);
 
-        var received = new List<WebSocketClusterFrame>();
+        var received = new List<ClusterFrame>();
         await foreach (var received_frame in connection.ReceiveFramesAsync(CancellationToken.None))
         {
             received.Add(received_frame);
         }
 
         received.Should().ContainSingle();
-        received[0].Kind.Should().Be(WebSocketClusterFrameKind.FanOut);
+        received[0].Kind.Should().Be(ClusterFrameKind.FanOut);
         received[0].PayloadJson.Should().Be(frame.PayloadJson);
     }
 
     [Fact]
     public async Task ReceiveFramesAsync_MultiFragmentMessage_ReassemblesBeforeYielding()
     {
-        var frame = new WebSocketClusterFrame(WebSocketClusterFrameKind.SubscriptionEvent, "{\"payload\":\"a somewhat longer value to force fragmentation in the test\"}");
+        var frame = new ClusterFrame(ClusterFrameKind.SubscriptionEvent, "{\"payload\":\"a somewhat longer value to force fragmentation in the test\"}");
         var bytes = Encoding.UTF8.GetBytes(frame.ToNJson());
         var splitAt = bytes.Length / 2;
         var callCount = 0;
@@ -102,7 +103,7 @@ public class WebSocketPeerConnectionTests
 
         var connection = new WebSocketPeerConnection(socket, 4096);
 
-        var received = new List<WebSocketClusterFrame>();
+        var received = new List<ClusterFrame>();
         await foreach (var received_frame in connection.ReceiveFramesAsync(CancellationToken.None))
         {
             received.Add(received_frame);
@@ -115,7 +116,7 @@ public class WebSocketPeerConnectionTests
     [Fact]
     public async Task ReceiveFramesAsync_MalformedMessage_IsSkippedWithoutThrowing()
     {
-        var goodFrame = new WebSocketClusterFrame(WebSocketClusterFrameKind.FanOut, "{\"ok\":true}");
+        var goodFrame = new ClusterFrame(ClusterFrameKind.FanOut, "{\"ok\":true}");
         var callCount = 0;
 
         var socket = CreateOpenSocketSubstitute();
@@ -141,7 +142,7 @@ public class WebSocketPeerConnectionTests
 
         var connection = new WebSocketPeerConnection(socket, 4096);
 
-        var received = new List<WebSocketClusterFrame>();
+        var received = new List<ClusterFrame>();
         var act = async () =>
         {
             await foreach (var received_frame in connection.ReceiveFramesAsync(CancellationToken.None))
@@ -164,7 +165,7 @@ public class WebSocketPeerConnectionTests
 
         var connection = new WebSocketPeerConnection(socket, 1024);
 
-        var received = new List<WebSocketClusterFrame>();
+        var received = new List<ClusterFrame>();
         await foreach (var received_frame in connection.ReceiveFramesAsync(CancellationToken.None))
         {
             received.Add(received_frame);

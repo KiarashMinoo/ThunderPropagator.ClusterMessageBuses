@@ -48,7 +48,7 @@ public class TcpClusterMessageBusSnapshotsTests
 
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.RestoreSnapshot, "orders", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "orders", null, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
@@ -64,7 +64,7 @@ public class TcpClusterMessageBusSnapshotsTests
 
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.RestoreSnapshot, "missing", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing", null, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeFalse();
@@ -83,11 +83,11 @@ public class TcpClusterMessageBusSnapshotsTests
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<TcpSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Should().ContainSingle(e => e.HashKey == 2);
     }
 
@@ -100,12 +100,12 @@ public class TcpClusterMessageBusSnapshotsTests
         // instance yet when wiring the connection, capture it via a mutable holder.
         TcpClusterMessageBus? busHolder = null;
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>())
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = (TcpClusterFrame)callInfo[0];
-                var request = frame.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!;
-                var response = new TcpClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
+                var frame = (ClusterFrame)callInfo[0];
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -119,9 +119,9 @@ public class TcpClusterMessageBusSnapshotsTests
         await act.Should().NotThrowAsync();
 
         await connection.Received(1).SendFrameAsync(
-            Arg.Is<TcpClusterFrame>(f => f.Kind == TcpClusterFrameKind.Request &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.Kind == TcpClusterRequestKind.RestoreSnapshot &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.ChannelName == "orders"),
+            Arg.Is<ClusterFrame>(f => f.Kind == ClusterFrameKind.Request &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.RestoreSnapshot &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.ChannelName == "orders"),
             Arg.Any<CancellationToken>());
     }
 
@@ -133,13 +133,13 @@ public class TcpClusterMessageBusSnapshotsTests
 
         TcpClusterMessageBus? busHolder = null;
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>())
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = (TcpClusterFrame)callInfo[0];
-                var request = frame.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!;
-                var deltaPayload = new TcpSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
-                var response = new TcpClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
+                var frame = (ClusterFrame)callInfo[0];
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var deltaPayload = new ClusterSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -151,9 +151,9 @@ public class TcpClusterMessageBusSnapshotsTests
         await bus.SyncDeltaFromLeaderAsync(new Uri("https://leader:5001/"), channel, since, CancellationToken.None);
 
         await connection.Received(1).SendFrameAsync(
-            Arg.Is<TcpClusterFrame>(f => f.Kind == TcpClusterFrameKind.Request &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.Kind == TcpClusterRequestKind.SyncDelta &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
+            Arg.Is<ClusterFrame>(f => f.Kind == ClusterFrameKind.Request &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.SyncDelta &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
             Arg.Any<CancellationToken>());
     }
 }

@@ -10,9 +10,9 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
     /// <summary>
     /// Shared broker-native request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="RabbitMqClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="ClusterRequestEnvelope"/>
     /// to the target's request queue (via the default exchange) and awaits a matching
-    /// <see cref="RabbitMqClusterResponseEnvelope"/> on this node's own reply queue. Answering side:
+    /// <see cref="ClusterResponseEnvelope"/> on this node's own reply queue. Answering side:
     /// the reply/request consumers started in <see cref="RabbitMqClusterMessageBus.EnsureInitializedAsync"/>
     /// deliver into <see cref="HandleRequestDeliveryAsync"/>, which dispatches to
     /// <see cref="BuildResponseAsync"/>, implemented per request kind in
@@ -23,9 +23,9 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<RabbitMqClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            RabbitMqClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -33,11 +33,8 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new RabbitMqClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<RabbitMqClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate RabbitMQ cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -81,17 +78,17 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal async Task HandleRequestDeliveryAsync(byte[] body, CancellationToken cancellationToken)
         {
-            RabbitMqClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = Encoding.UTF8.GetString(body).FromNJson<RabbitMqClusterRequestEnvelope>();
+                request = Encoding.UTF8.GetString(body).FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -112,10 +109,10 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         /// </summary>
         internal Task HandleReplyDeliveryAsync(byte[] body, CancellationToken cancellationToken)
         {
-            RabbitMqClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = Encoding.UTF8.GetString(body).FromNJson<RabbitMqClusterResponseEnvelope>();
+                response = Encoding.UTF8.GetString(body).FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -135,20 +132,15 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         /// <see cref="HandleReplyDeliveryAsync"/> (the real, only production caller) and tests, which
         /// use it to complete a round trip deterministically without racing a background consumer.
         /// </summary>
-        internal bool TryCompletePendingRequest(RabbitMqClusterResponseEnvelope response)
-        {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
-        }
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>RabbitMqClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and
         /// publishes the result back to the requester's reply queue.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(RabbitMqClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyQueue = RabbitMqTopicNaming.ReplyQueue(_options.ExchangePrefix, request.ReplyToNodeEndpoint);
@@ -169,22 +161,23 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             }
         }
 
-        internal async Task<RabbitMqClusterResponseEnvelope> BuildResponseAsync(RabbitMqClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    RabbitMqClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    RabbitMqClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    RabbitMqClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new RabbitMqClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new RabbitMqClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

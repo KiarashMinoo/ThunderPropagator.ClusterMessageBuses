@@ -9,8 +9,8 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
     /// <summary>
     /// Shared request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="RedisPubSubClusterRequestEnvelope"/>
-    /// to the target's request channel and awaits a matching <see cref="RedisPubSubClusterResponseEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="ClusterRequestEnvelope"/>
+    /// to the target's request channel and awaits a matching <see cref="ClusterResponseEnvelope"/>
     /// on this node's own reply channel. Answering side: the request subscription's handler (wired in
     /// <see cref="RedisPubSubClusterMessageBus.EnsureInitializedAsync"/>) delivers into
     /// <see cref="HandleRequestDeliveryAsync"/>, which dispatches to <see cref="BuildResponseAsync"/>,
@@ -24,9 +24,9 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<RedisPubSubClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            RedisPubSubClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -34,11 +34,8 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new RedisPubSubClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<RedisPubSubClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate Redis pub/sub cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -72,17 +69,17 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal async Task HandleRequestDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            RedisPubSubClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payload.FromNJson<RedisPubSubClusterRequestEnvelope>();
+                request = payload.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -99,10 +96,10 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal Task HandleReplyDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            RedisPubSubClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = payload.FromNJson<RedisPubSubClusterResponseEnvelope>();
+                response = payload.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -122,20 +119,15 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         /// <see cref="HandleReplyDeliveryAsync"/> (the real, only production caller) and tests, which
         /// use it to complete a round trip deterministically without racing a background subscription.
         /// </summary>
-        internal bool TryCompletePendingRequest(RedisPubSubClusterResponseEnvelope response)
-        {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
-        }
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>RedisPubSubClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and
         /// publishes the result back to the requester's reply channel.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(RedisPubSubClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyChannelName = RedisChannelNaming.ReplyChannel(_options.ChannelPrefix, request.ReplyToNodeEndpoint);
@@ -150,22 +142,23 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
             }
         }
 
-        internal async Task<RedisPubSubClusterResponseEnvelope> BuildResponseAsync(RedisPubSubClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    RedisPubSubClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    RedisPubSubClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    RedisPubSubClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new RedisPubSubClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new RedisPubSubClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

@@ -21,6 +21,22 @@ service ClusterFanOut {
   rpc Stream(stream PushedMessageBatch) returns (stream PushedMessageBatch);
 }
 
+// Byte-oriented counterpart to PushedMessageBatch/ClusterFanOut -- see the C# ClusterByteMessage
+// record's own doc comment for why this surface exists alongside, not instead of, the
+// ClusterFanOutMessage-based one. Kept as its own message/service/stream pair rather than an
+// overload of PushedMessageBatch/ClusterFanOut, since the two payload shapes are never
+// interchangeable on the wire (mirrors payload_json here carrying an NJson-serialized
+// ClusterByteMessage, the same "ride as an NJson blob" convention as every other payload in this
+// file).
+message PushedByteMessageBatch {
+  string channel_key = 1;
+  string payload_json = 2;
+}
+
+service ClusterByteFanOut {
+  rpc Stream(stream PushedByteMessageBatch) returns (stream PushedByteMessageBatch);
+}
+
 // Same one-call-per-direction shape as ClusterFanOut, but subscription-sync's response stream
 // carries a lightweight ack rather than being unused, since GrpcClusterMessageBus resends its
 // full locally-known subscription state after a reconnect and needs to know the peer applied it.
@@ -67,9 +83,26 @@ message SyncDeltaResponse {
   repeated int32 deleted_hash_keys = 4;
 }
 
+// Byte-oriented, channel-agnostic counterpart to RestoreSnapshotRequest/Response -- backs
+// IClusterMessageBus.PullSnapshotAsync. Added as a new unary RPC on the existing ClusterSnapshot
+// service rather than a new service, since it is still a single-request/single-response
+// leader-pull operation exactly like RestoreSnapshot/SyncDelta.
+message PullSnapshotBytesRequest {
+  string channel_key = 1;
+}
+
+message PullSnapshotBytesResponse {
+  bool success = 1;
+  string error_message = 2;
+  // NJson-serialized byte[]? -- null (serialized as the JSON literal "null") when the answering
+  // node has no IClusterByteSnapshotProvider registered, or it has nothing to offer yet.
+  string snapshot_json = 3;
+}
+
 service ClusterSnapshot {
   rpc RestoreSnapshot(RestoreSnapshotRequest) returns (RestoreSnapshotResponse);
   rpc SyncDelta(SyncDeltaRequest) returns (SyncDeltaResponse);
+  rpc PullSnapshotBytes(PullSnapshotBytesRequest) returns (PullSnapshotBytesResponse);
 }
 
 message FetchSubscriptionsRequest {

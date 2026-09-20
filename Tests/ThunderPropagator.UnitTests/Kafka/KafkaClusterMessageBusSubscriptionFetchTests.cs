@@ -25,7 +25,7 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
-        var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), KafkaClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -42,7 +42,7 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
-        var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), KafkaClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -67,11 +67,11 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
     [Fact]
     public async Task FetchPeerSubscriptionsAsync_MatchingReplyArrives_ReturnsTheDescriptors()
     {
-        KafkaClusterRequestEnvelope? sentRequest = null;
+        ClusterRequestEnvelope? sentRequest = null;
         var producer = Substitute.For<IProducer<string, string>>();
         producer.ProduceAsync(
                 Arg.Any<string>(),
-                Arg.Do<Message<string, string>>(m => sentRequest = m.Value.FromNJson<KafkaClusterRequestEnvelope>()),
+                Arg.Do<Message<string, string>>(m => sentRequest = m.Value.FromNJson<ClusterRequestEnvelope>()),
                 Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<DeliveryResult<string, string>>(null!));
 
@@ -81,7 +81,7 @@ public class KafkaClusterMessageBusSubscriptionFetchTests
 
         sentRequest.Should().NotBeNull();
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-9", "req-9", "conn-9") };
-        bus.TryCompletePendingRequest(new KafkaClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, descriptors.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, descriptors.ToNJson()));
 
         var result = await fetchTask;
 

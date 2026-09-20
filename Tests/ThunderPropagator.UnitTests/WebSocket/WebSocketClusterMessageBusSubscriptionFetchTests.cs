@@ -24,7 +24,7 @@ public class WebSocketClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -41,7 +41,7 @@ public class WebSocketClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -72,11 +72,11 @@ public class WebSocketClusterMessageBusSubscriptionFetchTests
         var call = peerSocket.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(System.Net.WebSockets.WebSocket.SendAsync));
         var segment = (ArraySegment<byte>)call.GetArguments()[0]!;
-        var frame = Encoding.UTF8.GetString(segment).FromNJson<WebSocketClusterFrame>()!;
-        var sentRequest = frame.PayloadJson.FromNJson<WebSocketClusterRequestEnvelope>()!;
+        var frame = Encoding.UTF8.GetString(segment).FromNJson<ClusterFrame>()!;
+        var sentRequest = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
 
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-9", "req-9", "conn-9") };
-        bus.TryCompletePendingRequest(new WebSocketClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
 
         var result = await fetchTask;
 

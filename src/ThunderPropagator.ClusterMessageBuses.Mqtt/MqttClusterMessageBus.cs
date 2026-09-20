@@ -48,7 +48,11 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<MqttClusterResponseEnvelope>> _pendingRequests = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
+
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly CancellationTokenSource _lifetimeCts = new();
 
@@ -60,7 +64,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             ClusterConfiguration clusterConfiguration,
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
-            IMqttClusterTransport? transport = null)
+            IMqttClusterTransport? transport = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -70,6 +75,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<MqttClusterMessageBus>();
             _transport = transport ?? new MqttClusterTransport(_options.Host, _options.Port, _options.ClientId);
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -123,10 +129,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
                 }
             }
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves as channels
             // unsubscribe — but if the whole bus is torn down first (e.g. host shutdown) without
@@ -141,6 +144,11 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             await _transport.DisposeAsync().ConfigureAwait(false);

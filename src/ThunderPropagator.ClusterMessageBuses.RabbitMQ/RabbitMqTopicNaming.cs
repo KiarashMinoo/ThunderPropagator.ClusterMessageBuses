@@ -21,6 +21,10 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         internal static string SubscriptionEventExchange(string exchangePrefix, Guid channelKey)
             => $"{exchangePrefix}.subscriptions.{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out exchange (type "fanout") for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own exchange namespace rather than sharing <see cref="FanOutExchange"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutExchange(string exchangePrefix, Guid channelKey)
+            => $"{exchangePrefix}.bytefanout.{channelKey:N}";
+
         /// <summary>
         /// The queue a node listens on for inbound broker-native requests (restore/delta/fetch-
         /// subscriptions) addressed to it. Requesters publish here (via the default exchange, using

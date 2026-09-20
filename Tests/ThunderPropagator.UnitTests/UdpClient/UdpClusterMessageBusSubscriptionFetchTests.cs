@@ -23,9 +23,9 @@ public class UdpClusterMessageBusSubscriptionFetchTests
         socket.SendDatagramAsync(Arg.Any<byte[]>(), Arg.Any<IPEndPoint>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<UdpClusterFrame>()!;
-                var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>()!;
-                var response = new UdpClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<ClusterFrame>()!;
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -48,9 +48,9 @@ public class UdpClusterMessageBusSubscriptionFetchTests
     // a statement body, the null-conditional operator, or an 'is' pattern-matching operator.
     private static bool IsFetchSubscriptionsRequest(byte[] bytes, Guid channelKey)
     {
-        var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-        var request = frame?.PayloadJson.FromNJson<UdpClusterRequestEnvelope>();
-        return request is not null && request.Kind == UdpClusterRequestKind.FetchSubscriptions && request.ChannelKey == channelKey;
+        var frame = Encoding.UTF8.GetString(bytes).FromNJson<ClusterFrame>();
+        var request = frame?.PayloadJson.FromNJson<ClusterRequestEnvelope>();
+        return request is not null && request.Kind == ClusterRequestKind.FetchSubscriptions && request.ChannelKey == channelKey;
     }
 
     [Fact]
@@ -63,9 +63,9 @@ public class UdpClusterMessageBusSubscriptionFetchTests
         socket.SendDatagramAsync(Arg.Any<byte[]>(), Arg.Any<IPEndPoint>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<UdpClusterFrame>()!;
-                var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>()!;
-                var response = new UdpClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
+                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<ClusterFrame>()!;
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -104,7 +104,7 @@ public class UdpClusterMessageBusSubscriptionFetchTests
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();

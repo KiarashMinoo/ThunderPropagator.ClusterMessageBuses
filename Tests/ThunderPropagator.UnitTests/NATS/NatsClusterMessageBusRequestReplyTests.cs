@@ -20,7 +20,7 @@ public class NatsClusterMessageBusRequestReplyTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -35,7 +35,7 @@ public class NatsClusterMessageBusRequestReplyTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -58,7 +58,7 @@ public class NatsClusterMessageBusRequestReplyTests
         cts.Cancel();
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
@@ -74,7 +74,7 @@ public class NatsClusterMessageBusRequestReplyTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be(payload);
@@ -90,7 +90,7 @@ public class NatsClusterMessageBusRequestReplyTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
     }
@@ -105,7 +105,7 @@ public class NatsClusterMessageBusRequestReplyTests
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<Exception>();
     }
@@ -122,7 +122,7 @@ public class NatsClusterMessageBusRequestReplyTests
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, channelResolver: resolver);
 
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
         var delivery = new NatsClusterDelivery(request.ToNJson(), "_INBOX.abc123");
 
         await bus.HandleRequestDeliveryAsync(delivery, CancellationToken.None);
@@ -139,7 +139,7 @@ public class NatsClusterMessageBusRequestReplyTests
         var transport = NatsClusterMessageBusTestHelpers.CreateSubstituteTransport();
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(transport: transport);
 
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
         var delivery = new NatsClusterDelivery(request.ToNJson(), null);
 
         var act = async () => await bus.HandleRequestDeliveryAsync(delivery, CancellationToken.None);

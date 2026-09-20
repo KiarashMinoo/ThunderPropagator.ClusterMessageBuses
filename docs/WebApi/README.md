@@ -39,7 +39,6 @@ The **WebApi** area groups 2 documented types, including `WebApiClusterMessageBu
 | `WebApiIncomingRequest.cs` | `WebApiIncomingRequest` | 19 | Defines WebApiIncomingRequest and its related behavior. |
 | `WebApiRouteKind.cs` | `WebApiRouteKind` | 12 | Defines WebApiRouteKind and its related behavior. |
 | `WebApiRouteMatch.cs` | `WebApiRouteMatch` | 5 | Defines WebApiRouteMatch and its related behavior. |
-| `WebApiSnapshotDeltaPayload.cs` | `WebApiSnapshotDeltaPayload` | 14 | Defines WebApiSnapshotDeltaPayload and its related behavior. |
 
 ## Types and Members
 

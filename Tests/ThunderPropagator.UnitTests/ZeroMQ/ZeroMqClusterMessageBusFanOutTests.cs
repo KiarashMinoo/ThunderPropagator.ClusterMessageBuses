@@ -4,6 +4,7 @@ using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.ZeroMQ;
 
 namespace ThunderPropagator.UnitTests.ZeroMQ;
@@ -26,10 +27,10 @@ public class ZeroMqClusterMessageBusFanOutTests
 
         await bus.PublishAsync(channelKey, message);
 
-        connection.Received(1).SendFrame(Arg.Is<ZeroMqClusterFrame>(f =>
-            f.Kind == ZeroMqClusterFrameKind.FanOut &&
-            f.PayloadJson.FromNJson<ZeroMqFanOutPayload>()!.ChannelKey == channelKey &&
-            f.PayloadJson.FromNJson<ZeroMqFanOutPayload>()!.Message.OriginId == bus.SelfId));
+        connection.Received(1).SendFrame(Arg.Is<ClusterFrame>(f =>
+            f.Kind == ClusterFrameKind.FanOut &&
+            f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterFanOutMessage>>()!.ChannelKey == channelKey &&
+            f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterFanOutMessage>>()!.Message.OriginId == bus.SelfId));
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public class ZeroMqClusterMessageBusFanOutTests
         var act = async () => await bus.PublishAsync(Guid.NewGuid(), message);
 
         await act.Should().NotThrowAsync("one unreachable peer must not fail the whole fan-out publish");
-        goodConnection.Received(1).SendFrame(Arg.Any<ZeroMqClusterFrame>());
+        goodConnection.Received(1).SendFrame(Arg.Any<ClusterFrame>());
     }
 
     [Fact]
@@ -68,7 +69,7 @@ public class ZeroMqClusterMessageBusFanOutTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var selfMessage = new ClusterFanOutMessage(bus.SelfId, 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new ZeroMqFanOutPayload(channelKey, selfMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, selfMessage);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -87,7 +88,7 @@ public class ZeroMqClusterMessageBusFanOutTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignMessage = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new ZeroMqFanOutPayload(channelKey, foreignMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, foreignMessage);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -101,7 +102,7 @@ public class ZeroMqClusterMessageBusFanOutTests
         await using var bus = await ZeroMqClusterMessageBusTestHelpers.CreateBusAsync();
 
         var foreignMessage = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new ZeroMqFanOutPayload(Guid.NewGuid(), foreignMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(Guid.NewGuid(), foreignMessage);
 
         var act = async () => await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -131,7 +132,7 @@ public class ZeroMqClusterMessageBusFanOutTests
         await subscription.DisposeAsync();
 
         var message = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new ZeroMqFanOutPayload(channelKey, message);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, message);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 

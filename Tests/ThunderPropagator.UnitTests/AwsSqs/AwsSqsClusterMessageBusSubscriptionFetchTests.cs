@@ -22,8 +22,8 @@ public class AwsSqsClusterMessageBusSubscriptionFetchTests
         sqs.SendMessageAsync(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!;
-                var response = new AwsSqsClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.FromResult(new SendMessageResponse());
             });
@@ -37,8 +37,8 @@ public class AwsSqsClusterMessageBusSubscriptionFetchTests
 
         await sqs.Received(1).SendMessageAsync(
             Arg.Is<SendMessageRequest>(r =>
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.Kind == AwsSqsClusterRequestKind.FetchSubscriptions &&
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.ChannelKey == channelKey),
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.FetchSubscriptions &&
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.ChannelKey == channelKey),
             Arg.Any<CancellationToken>());
     }
 
@@ -52,8 +52,8 @@ public class AwsSqsClusterMessageBusSubscriptionFetchTests
         sqs.SendMessageAsync(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!;
-                var response = new AwsSqsClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
+                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.FromResult(new SendMessageResponse());
             });
@@ -89,7 +89,7 @@ public class AwsSqsClusterMessageBusSubscriptionFetchTests
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();

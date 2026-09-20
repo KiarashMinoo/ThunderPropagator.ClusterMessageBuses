@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels;
 using ThunderPropagator.Application.Channels.Snapshots;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.Mqtt
 {
@@ -12,7 +13,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             Log.RestoringChannel(_logger, channel.Metadata.ChannelName, leaderEndpoint.Host);
 
             var response = await SendRequestAsync(
-                leaderEndpoint, MqttClusterRequestKind.RestoreSnapshot, channel.Metadata.ChannelName, null, null, cancellationToken)
+                leaderEndpoint, ClusterRequestKind.RestoreSnapshot, channel.Metadata.ChannelName, null, null, cancellationToken)
                 .ConfigureAwait(false);
 
             var entries = response.PayloadJson?.FromNJson<SnapshotEntry[]>() ?? [];
@@ -30,10 +31,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         public override async Task SyncDeltaFromLeaderAsync(Uri leaderEndpoint, IChannel channel, DateTimeOffset since, CancellationToken cancellationToken = default)
         {
             var response = await SendRequestAsync(
-                leaderEndpoint, MqttClusterRequestKind.SyncDelta, channel.Metadata.ChannelName, null, since.UtcTicks, cancellationToken)
+                leaderEndpoint, ClusterRequestKind.SyncDelta, channel.Metadata.ChannelName, null, since.UtcTicks, cancellationToken)
                 .ConfigureAwait(false);
 
-            var delta = response.PayloadJson?.FromNJson<MqttSnapshotDeltaPayload>();
+            var delta = response.PayloadJson?.FromNJson<ClusterSnapshotDeltaPayload>();
             if (delta is null)
                 return;
 
@@ -56,16 +57,16 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         }
 
         /// <summary>Answering side of <see cref="RestoreFromLeaderAsync"/>: mirrors <c>ClusterSnapshotEndpoints</c>'s GET-snapshot handler.</summary>
-        private async Task<MqttClusterResponseEnvelope> BuildRestoreSnapshotResponseAsync(MqttClusterRequestEnvelope request, CancellationToken cancellationToken)
+        private async Task<ClusterResponseEnvelope> BuildRestoreSnapshotResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var channel = _channelResolver.GetChannel(request.ChannelName!);
             var entries = await channel.SearchSnapshotsAsync(e => e.State == SnapshotEntryState.Active, 0, 0, cancellationToken).ConfigureAwait(false);
 
-            return new MqttClusterResponseEnvelope(request.CorrelationId, true, null, entries.ToNJson());
+            return new ClusterResponseEnvelope(request.CorrelationId, true, null, entries.ToNJson());
         }
 
         /// <summary>Answering side of <see cref="SyncDeltaFromLeaderAsync"/>: mirrors <c>ClusterSnapshotDeltaEndpoints</c>'s GET-delta handler.</summary>
-        private async Task<MqttClusterResponseEnvelope> BuildSyncDeltaResponseAsync(MqttClusterRequestEnvelope request, CancellationToken cancellationToken)
+        private async Task<ClusterResponseEnvelope> BuildSyncDeltaResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var since = new DateTimeOffset(request.SinceTicks!.Value, TimeSpan.Zero);
             var channel = _channelResolver.GetChannel(request.ChannelName!);
@@ -74,8 +75,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
                 e => e.State == SnapshotEntryState.Active && e.LastModified >= since, 0, 0, cancellationToken).ConfigureAwait(false);
             var deletedHashKeys = GetSnapshotTombstonesSince(channel, since);
 
-            var payload = new MqttSnapshotDeltaPayload { UpdatedEntries = updatedEntries, DeletedHashKeys = deletedHashKeys };
-            return new MqttClusterResponseEnvelope(request.CorrelationId, true, null, payload.ToNJson());
+            var payload = new ClusterSnapshotDeltaPayload { UpdatedEntries = updatedEntries, DeletedHashKeys = deletedHashKeys };
+            return new ClusterResponseEnvelope(request.CorrelationId, true, null, payload.ToNJson());
         }
 
         private static partial class Log

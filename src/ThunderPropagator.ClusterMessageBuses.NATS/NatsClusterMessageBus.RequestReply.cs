@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.NATS
 {
@@ -21,7 +22,7 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
         internal async Task<NatsClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            NatsClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -121,9 +122,10 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
             {
                 return request.Kind switch
                 {
-                    NatsClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    NatsClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    NatsClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
                     _ => new NatsClusterResponseEnvelope(false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }

@@ -47,7 +47,7 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
@@ -63,7 +63,7 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeFalse();
@@ -82,11 +82,11 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<GcpPubSubSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Should().ContainSingle(e => e.HashKey == 2);
     }
 
@@ -104,8 +104,8 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
                 var messages = (IEnumerable<PubsubMessage>)callInfo[1];
                 if (topicName.TopicId.Contains("-requests-"))
                 {
-                    var request = messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!;
-                    var response = new GcpPubSubClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
+                    var request = messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!;
+                    var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
                     _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 }
 
@@ -124,8 +124,8 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
         await publisher.Received(1).PublishAsync(
             Arg.Is<TopicName>(t => t.TopicId == expectedRequestTopicId),
             Arg.Is<IEnumerable<PubsubMessage>>(messages =>
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.Kind == GcpPubSubClusterRequestKind.RestoreSnapshot &&
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.ChannelName == "orders"),
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.RestoreSnapshot &&
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.ChannelName == "orders"),
             Arg.Any<CancellationToken>());
     }
 
@@ -144,9 +144,9 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
                 var messages = (IEnumerable<PubsubMessage>)callInfo[1];
                 if (topicName.TopicId.Contains("-requests-"))
                 {
-                    var request = messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!;
-                    var deltaPayload = new GcpPubSubSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
-                    var response = new GcpPubSubClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
+                    var request = messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!;
+                    var deltaPayload = new ClusterSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
+                    var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
                     _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 }
 
@@ -161,8 +161,8 @@ public class GcpPubSubClusterMessageBusSnapshotsTests
         await publisher.Received(1).PublishAsync(
             Arg.Any<TopicName>(),
             Arg.Is<IEnumerable<PubsubMessage>>(messages =>
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.Kind == GcpPubSubClusterRequestKind.SyncDelta &&
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.SyncDelta &&
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
             Arg.Any<CancellationToken>());
     }
 }

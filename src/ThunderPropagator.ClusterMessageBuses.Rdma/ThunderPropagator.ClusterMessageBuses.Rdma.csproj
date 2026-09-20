@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThunderPropagator.ClusterMessageBuses.SharedKernel\ThunderPropagator.ClusterMessageBuses.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <!-- No PackageReference for RDMA itself: libibverbs/librdmacm are native OS shared libraries
+       (libibverbs.so.1, librdmacm.so.1), not NuGet packages. There is no managed RDMA binding for
+       .NET, so this project P/Invokes the native libraries directly (see Native/*.cs). Nothing in
+       this .csproj installs, vendors, or guarantees the presence of those native libraries on the
+       target host - see RdmaClusterMessageBusExtensions' <remarks> for the runtime requirements. -->
+
+</Project>

@@ -5,6 +5,7 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.UdpClient;
 
 namespace ThunderPropagator.UnitTests.UdpClient;
@@ -36,12 +37,12 @@ public class UdpClusterMessageBusSubscriptionSyncTests
 
     private static bool DatagramMatches(byte[] bytes, Guid expectedChannelKey, Guid expectedSelfId)
     {
-        var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-        if (frame is null || frame.Kind != UdpClusterFrameKind.SubscriptionEvent)
+        var frame = Encoding.UTF8.GetString(bytes).FromNJson<ClusterFrame>();
+        if (frame is null || frame.Kind != ClusterFrameKind.SubscriptionEvent)
             return false;
 
-        var payload = frame.PayloadJson.FromNJson<UdpSubscriptionEventPayload>();
-        return payload is not null && payload.ChannelKey == expectedChannelKey && payload.Event.OriginId == expectedSelfId;
+        var payload = frame.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>();
+        return payload is not null && payload.ChannelKey == expectedChannelKey && payload.Message.OriginId == expectedSelfId;
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public class UdpClusterMessageBusSubscriptionSyncTests
         var channelKey = Guid.NewGuid();
         await bus.SubscribeAsync(channelKey, handler);
 
-        var payload = new UdpSubscriptionEventPayload(channelKey, CreateEvent(bus.SelfId));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(bus.SelfId));
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -89,7 +90,7 @@ public class UdpClusterMessageBusSubscriptionSyncTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignEvent = CreateEvent(Guid.NewGuid());
-        var payload = new UdpSubscriptionEventPayload(channelKey, foreignEvent);
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, foreignEvent);
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -102,7 +103,7 @@ public class UdpClusterMessageBusSubscriptionSyncTests
     {
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var payload = new UdpSubscriptionEventPayload(Guid.NewGuid(), CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(Guid.NewGuid(), CreateEvent(Guid.NewGuid()));
 
         var act = async () => await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -131,7 +132,7 @@ public class UdpClusterMessageBusSubscriptionSyncTests
         var subscription = await bus.SubscribeAsync(channelKey, handler);
         await subscription.DisposeAsync();
 
-        var payload = new UdpSubscriptionEventPayload(channelKey, CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(Guid.NewGuid()));
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
         invoked.Should().BeFalse("a disposed subscription must not receive further deliveries");

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels;
 using ThunderPropagator.Application.Channels.Snapshots;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.WebApi
 {
@@ -38,7 +39,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
             response.EnsureSuccessStatusCode();
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            var delta = body.FromNJson<WebApiSnapshotDeltaPayload>();
+            var delta = body.FromNJson<ClusterSnapshotDeltaPayload>();
             if (delta is null)
                 return;
 
@@ -79,7 +80,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
                 e => e.State == SnapshotEntryState.Active && e.LastModified >= since, 0, 0, cancellationToken).ConfigureAwait(false);
             var deletedHashKeys = GetSnapshotTombstonesSince(channel, since);
 
-            var payload = new WebApiSnapshotDeltaPayload { UpdatedEntries = updatedEntries, DeletedHashKeys = deletedHashKeys };
+            var payload = new ClusterSnapshotDeltaPayload { UpdatedEntries = updatedEntries, DeletedHashKeys = deletedHashKeys };
             return payload.ToNJson();
         }
 

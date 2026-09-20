@@ -24,6 +24,23 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             => $"{prefix}-subscriptions-{channelKey:N}";
 
         /// <summary>
+        /// SNS topic every node subscribes a queue to when it calls the byte-oriented <c>SubscribeAsync</c>
+        /// overload for this channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on
+        /// its own resource-name namespace, never sharing <see cref="FanOutTopic"/>, since the two
+        /// payload shapes are never interchangeable on the wire.
+        /// </summary>
+        internal static string ByteFanOutTopic(string prefix, Guid channelKey)
+            => $"{prefix}-bytefanout-{channelKey:N}";
+
+        /// <summary>
+        /// This node's own exclusive SQS queue for one channel key's byte-oriented fan-out
+        /// subscription — same deterministic, restart-survivable naming as <see cref="FanOutQueue"/>,
+        /// just on the byte-fanout resource-name namespace so it never collides with it.
+        /// </summary>
+        internal static string ByteFanOutQueue(string prefix, Uri nodeEndpoint, Guid channelKey)
+            => $"{prefix}-bytefanout-{Slugify(nodeEndpoint)}-{channelKey:N}";
+
+        /// <summary>
         /// This node's own exclusive SQS queue for one channel's fan-out subscription — deterministic
         /// (not GUID-suffixed) so it survives a restart and is trivially re-attachable, mirroring how
         /// <c>KafkaClusterMessageBus</c> reuses a stable per-node consumer group rather than a

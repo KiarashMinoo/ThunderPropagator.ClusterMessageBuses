@@ -24,6 +24,10 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
         internal static string SubscriptionEventSubject(string subjectPrefix, Guid channelKey)
             => $"{subjectPrefix}.subscriptions.{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out subject for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own subject namespace rather than sharing <see cref="FanOutSubject"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutSubject(string subjectPrefix, Guid channelKey)
+            => $"{subjectPrefix}.bytefanout.{channelKey:N}";
+
         /// <summary>
         /// The subject a node listens on for inbound requests (restore/delta/fetch-subscriptions)
         /// addressed to it. Requesters send a NATS request to the target's own subject using its

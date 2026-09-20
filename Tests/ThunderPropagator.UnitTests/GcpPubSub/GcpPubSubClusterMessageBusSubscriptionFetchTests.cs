@@ -26,8 +26,8 @@ public class GcpPubSubClusterMessageBusSubscriptionFetchTests
                 var messages = (IEnumerable<PubsubMessage>)callInfo[1];
                 if (topicName.TopicId.Contains("-requests-"))
                 {
-                    var request = messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!;
-                    var response = new GcpPubSubClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+                    var request = messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!;
+                    var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
                     _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 }
 
@@ -44,8 +44,8 @@ public class GcpPubSubClusterMessageBusSubscriptionFetchTests
         await publisher.Received(1).PublishAsync(
             Arg.Any<TopicName>(),
             Arg.Is<IEnumerable<PubsubMessage>>(messages =>
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.Kind == GcpPubSubClusterRequestKind.FetchSubscriptions &&
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!.ChannelKey == channelKey),
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.FetchSubscriptions &&
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!.ChannelKey == channelKey),
             Arg.Any<CancellationToken>());
     }
 
@@ -63,8 +63,8 @@ public class GcpPubSubClusterMessageBusSubscriptionFetchTests
                 var messages = (IEnumerable<PubsubMessage>)callInfo[1];
                 if (topicName.TopicId.Contains("-requests-"))
                 {
-                    var request = messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>()!;
-                    var response = new GcpPubSubClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
+                    var request = messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>()!;
+                    var response = new ClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
                     _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 }
 
@@ -102,7 +102,7 @@ public class GcpPubSubClusterMessageBusSubscriptionFetchTests
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();

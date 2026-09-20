@@ -36,7 +36,7 @@ internal static class TcpClusterMessageBusTestHelpers
     {
         var connection = Substitute.For<ITcpClusterConnection>();
 
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         connection.ReceiveFramesAsync(Arg.Any<CancellationToken>())
             .Returns(callInfo => EmptyUntilCancelledAsync((CancellationToken)callInfo[0]));
         connection.DisposeAsync().Returns(ValueTask.CompletedTask);
@@ -44,7 +44,7 @@ internal static class TcpClusterMessageBusTestHelpers
         return connection;
     }
 
-    private static async IAsyncEnumerable<TcpClusterFrame> EmptyUntilCancelledAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    private static async IAsyncEnumerable<ClusterFrame> EmptyUntilCancelledAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         try
         {

@@ -3,18 +3,19 @@ using NSubstitute;
 using StackExchange.Redis;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.RedisPubSub;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.RedisPubSub;
 
 public class RedisPubSubClusterMessageBusRequestReplyTests
 {
-    private static RedisPubSubClusterRequestEnvelope CapturePublishedRequest(ISubscriber subscriber)
+    private static ClusterRequestEnvelope CapturePublishedRequest(ISubscriber subscriber)
     {
         var call = subscriber.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(ISubscriber.PublishAsync));
         var value = (RedisValue)call.GetArguments()[1]!;
 
-        return value.ToString().FromNJson<RedisPubSubClusterRequestEnvelope>()!;
+        return value.ToString().FromNJson<ClusterRequestEnvelope>()!;
     }
 
     [Fact]
@@ -23,7 +24,7 @@ public class RedisPubSubClusterMessageBusRequestReplyTests
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync(requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), RedisPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -35,7 +36,7 @@ public class RedisPubSubClusterMessageBusRequestReplyTests
 
         using var cts = new CancellationTokenSource();
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), RedisPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
 
         cts.Cancel();
 
@@ -52,12 +53,12 @@ public class RedisPubSubClusterMessageBusRequestReplyTests
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync(connection: connection, requestTimeout: TimeSpan.FromSeconds(5));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), RedisPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(subscriber);
         var expectedPayload = "[{\"SubscriptionId\":\"sub-9\"}]";
 
-        var completed = bus.TryCompletePendingRequest(new RedisPubSubClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
 
         completed.Should().BeTrue();
 
@@ -74,11 +75,11 @@ public class RedisPubSubClusterMessageBusRequestReplyTests
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync(connection: connection, requestTimeout: TimeSpan.FromSeconds(5));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), RedisPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(subscriber);
 
-        var completed = bus.TryCompletePendingRequest(new RedisPubSubClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
         completed.Should().BeTrue();
 
         var act = async () => await task;
@@ -91,7 +92,7 @@ public class RedisPubSubClusterMessageBusRequestReplyTests
     {
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new RedisPubSubClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }

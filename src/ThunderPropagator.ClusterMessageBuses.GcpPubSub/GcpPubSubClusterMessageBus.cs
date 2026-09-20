@@ -71,8 +71,12 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
 
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<GcpPubSubClusterResponseEnvelope>> _pendingRequests = new();
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
+
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -87,7 +91,8 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<PublisherServiceApiClient>>? publisherFactory = null,
-            Func<CancellationToken, Task<SubscriberServiceApiClient>>? subscriberFactory = null)
+            Func<CancellationToken, Task<SubscriberServiceApiClient>>? subscriberFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             if (string.IsNullOrWhiteSpace(_options.ProjectId))
@@ -106,6 +111,7 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
             _logger = loggerFactory.CreateLogger<GcpPubSubClusterMessageBus>();
             _publisherFactory = publisherFactory ?? DefaultPublisherFactoryAsync;
             _subscriberFactory = subscriberFactory ?? DefaultSubscriberFactoryAsync;
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -274,10 +280,7 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves — but if the
             // whole bus is torn down first without that happening, every still-open subscription
@@ -292,6 +295,11 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             try

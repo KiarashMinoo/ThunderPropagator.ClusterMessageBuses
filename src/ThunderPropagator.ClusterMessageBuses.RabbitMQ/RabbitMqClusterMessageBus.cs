@@ -70,8 +70,12 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
 
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<RabbitMqClusterResponseEnvelope>> _pendingRequests = new();
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
+
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
 
         // Same constructor-injection-for-testability shape as KafkaClusterMessageBus/
@@ -83,7 +87,8 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             ClusterConfiguration clusterConfiguration,
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
-            Func<CancellationToken, Task<IConnection>>? connectionFactory = null)
+            Func<CancellationToken, Task<IConnection>>? connectionFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -93,6 +98,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<RabbitMqClusterMessageBus>();
             _connectionFactory = connectionFactory ?? DefaultConnectionFactoryAsync;
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -157,10 +163,7 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves as channels
             // unsubscribe — but if the whole bus is torn down first (e.g. host shutdown) without
@@ -175,6 +178,11 @@ namespace ThunderPropagator.ClusterMessageBuses.RabbitMQ
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             foreach (var channel in new[] { _requestListenerChannel, _replyListenerChannel, _publishChannel })

@@ -5,6 +5,7 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.WebSocket;
 
 namespace ThunderPropagator.UnitTests.WebSocket;
@@ -43,12 +44,12 @@ public class WebSocketClusterMessageBusSubscriptionSyncTests
 
     private static bool MatchesSubscriptionEvent(ArraySegment<byte> segment, Guid expectedChannelKey, Guid expectedSelfId)
     {
-        var frame = Encoding.UTF8.GetString(segment).FromNJson<WebSocketClusterFrame>();
-        if (frame is null || frame.Kind != WebSocketClusterFrameKind.SubscriptionEvent)
+        var frame = Encoding.UTF8.GetString(segment).FromNJson<ClusterFrame>();
+        if (frame is null || frame.Kind != ClusterFrameKind.SubscriptionEvent)
             return false;
 
-        var payload = frame.PayloadJson.FromNJson<WebSocketSubscriptionEventPayload>();
-        return payload is not null && payload.ChannelKey == expectedChannelKey && payload.Event.OriginId == expectedSelfId;
+        var payload = frame.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>();
+        return payload is not null && payload.ChannelKey == expectedChannelKey && payload.Message.OriginId == expectedSelfId;
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class WebSocketClusterMessageBusSubscriptionSyncTests
         var channelKey = Guid.NewGuid();
         await bus.SubscribeAsync(channelKey, handler);
 
-        var payload = new WebSocketSubscriptionEventPayload(channelKey, CreateEvent(bus.SelfId));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(bus.SelfId));
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -81,7 +82,7 @@ public class WebSocketClusterMessageBusSubscriptionSyncTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignEvent = CreateEvent(Guid.NewGuid());
-        var payload = new WebSocketSubscriptionEventPayload(channelKey, foreignEvent);
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, foreignEvent);
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -111,7 +112,7 @@ public class WebSocketClusterMessageBusSubscriptionSyncTests
         var subscription = await bus.SubscribeAsync(channelKey, handler);
         await subscription.DisposeAsync();
 
-        var payload = new WebSocketSubscriptionEventPayload(channelKey, CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(Guid.NewGuid()));
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 

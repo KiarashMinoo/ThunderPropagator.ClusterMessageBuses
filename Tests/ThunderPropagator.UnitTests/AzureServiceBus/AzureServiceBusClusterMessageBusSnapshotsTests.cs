@@ -47,7 +47,7 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
@@ -63,7 +63,7 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeFalse();
@@ -82,11 +82,11 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<AzureServiceBusSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Should().ContainSingle(e => e.HashKey == 2);
     }
 
@@ -100,8 +100,8 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
         sender.SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!;
-                var response = new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
+                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -119,8 +119,8 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
         client.Received().CreateSender(expectedRequestQueueName);
         await sender.Received(1).SendMessageAsync(
             Arg.Is<ServiceBusMessage>(m =>
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.Kind == AzureServiceBusClusterRequestKind.RestoreSnapshot &&
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.ChannelName == "orders"),
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.RestoreSnapshot &&
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.ChannelName == "orders"),
             Arg.Any<CancellationToken>());
     }
 
@@ -135,9 +135,9 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
         sender.SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!;
-                var deltaPayload = new AzureServiceBusSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
-                var response = new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
+                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<ClusterRequestEnvelope>()!;
+                var deltaPayload = new ClusterSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -150,8 +150,8 @@ public class AzureServiceBusClusterMessageBusSnapshotsTests
 
         await sender.Received(1).SendMessageAsync(
             Arg.Is<ServiceBusMessage>(m =>
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.Kind == AzureServiceBusClusterRequestKind.SyncDelta &&
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.SyncDelta &&
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
             Arg.Any<CancellationToken>());
     }
 }

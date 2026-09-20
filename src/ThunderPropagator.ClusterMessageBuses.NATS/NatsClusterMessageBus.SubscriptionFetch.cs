@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.NATS
 {
@@ -11,7 +12,7 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
             try
             {
                 var response = await SendRequestAsync(
-                    peerEndpoint, NatsClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
+                    peerEndpoint, ClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
                     .ConfigureAwait(false);
 
                 return response.PayloadJson?.FromNJson<ClusterSubscriptionDescriptor[]>() ?? [];

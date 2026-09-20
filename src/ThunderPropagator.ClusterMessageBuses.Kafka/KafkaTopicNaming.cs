@@ -19,6 +19,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         internal static string SubscriptionEventTopic(string topicPrefix, Guid channelKey)
             => $"{topicPrefix}.subscriptions.{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out topic for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own topic namespace rather than sharing <see cref="FanOutTopic"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutTopic(string topicPrefix, Guid channelKey)
+            => $"{topicPrefix}.bytefanout.{channelKey:N}";
+
         /// <summary>
         /// The topic a node listens on for inbound broker-native requests (restore/delta/fetch-
         /// subscriptions) addressed to it. Requesters publish here using the target's own

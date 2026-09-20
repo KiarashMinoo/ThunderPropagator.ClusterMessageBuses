@@ -21,7 +21,7 @@ public class PulsarClusterMessageBusSnapshotsTests
         resolver.GetChannel("my-channel").Returns(channel);
 
         await using var bus = await PulsarClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new PulsarClusterRequestEnvelope(Guid.NewGuid(), PulsarClusterRequestKind.RestoreSnapshot, "my-channel", null, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "my-channel", null, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -42,12 +42,12 @@ public class PulsarClusterMessageBusSnapshotsTests
 
         await using var bus = await PulsarClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new PulsarClusterRequestEnvelope(Guid.NewGuid(), PulsarClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var payload = response.PayloadJson!.FromNJson<PulsarSnapshotDeltaPayload>();
+        var payload = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         payload.Should().NotBeNull();
     }
 
@@ -58,7 +58,7 @@ public class PulsarClusterMessageBusSnapshotsTests
         resolver.GetChannel("missing-channel").Returns(_ => throw new KeyNotFoundException("no such channel"));
 
         await using var bus = await PulsarClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new PulsarClusterRequestEnvelope(Guid.NewGuid(), PulsarClusterRequestKind.RestoreSnapshot, "missing-channel", null, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing-channel", null, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

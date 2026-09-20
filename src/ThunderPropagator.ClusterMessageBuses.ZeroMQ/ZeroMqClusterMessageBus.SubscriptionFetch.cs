@@ -1,5 +1,6 @@
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 {
@@ -10,7 +11,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
             try
             {
                 var response = await SendRequestAsync(
-                    peerEndpoint, ZeroMqClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
+                    peerEndpoint, ClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
                     .ConfigureAwait(false);
 
                 return response.PayloadJson?.FromNJson<ClusterSubscriptionDescriptor[]>() ?? [];
@@ -25,18 +26,18 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
         }
 
         /// <summary>Answering side of <see cref="FetchPeerSubscriptionsAsync"/>.</summary>
-        private Task<ZeroMqClusterResponseEnvelope> BuildFetchSubscriptionsResponseAsync(ZeroMqClusterRequestEnvelope request, CancellationToken cancellationToken)
+        private Task<ClusterResponseEnvelope> BuildFetchSubscriptionsResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 var channel = _channelResolver.GetChannel(request.ChannelKey!.Value);
                 var descriptors = GetLocalClusterSubscriptionDescriptors(channel);
 
-                return Task.FromResult(new ZeroMqClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson()));
+                return Task.FromResult(new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson()));
             }
             catch (Exception exception)
             {
-                return Task.FromResult(new ZeroMqClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null));
+                return Task.FromResult(new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null));
             }
         }
     }

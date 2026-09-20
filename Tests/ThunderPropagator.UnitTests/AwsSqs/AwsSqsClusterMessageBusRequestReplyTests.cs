@@ -5,6 +5,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.AwsSqs;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.AwsSqs;
 
@@ -18,7 +19,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
     /// real poll loop or real AWS resources.
     /// </summary>
     private static IAmazonSQS CreateSqsWithAutoReply(
-        Func<AwsSqsClusterRequestEnvelope, AwsSqsClusterResponseEnvelope> buildResponse,
+        Func<ClusterRequestEnvelope, ClusterResponseEnvelope> buildResponse,
         Func<AwsSqsClusterMessageBus> bus)
     {
         var sqs = AwsSqsClusterMessageBusTestHelpers.CreateSqsSubstitute();
@@ -26,7 +27,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
             .Returns(callInfo =>
             {
                 var request = (SendMessageRequest)callInfo[0];
-                var parsedRequest = request.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>();
+                var parsedRequest = request.MessageBody.FromNJson<ClusterRequestEnvelope>();
                 if (parsedRequest is not null)
                 {
                     var response = buildResponse(parsedRequest);
@@ -43,14 +44,14 @@ public class AwsSqsClusterMessageBusRequestReplyTests
     {
         AwsSqsClusterMessageBus? busHolder = null;
         var sqs = CreateSqsWithAutoReply(
-            request => new AwsSqsClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            request => new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => busHolder!);
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sqs: sqs);
         busHolder = bus;
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AwsSqsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be("\"payload\"");
@@ -61,14 +62,14 @@ public class AwsSqsClusterMessageBusRequestReplyTests
     {
         AwsSqsClusterMessageBus? busHolder = null;
         var sqs = CreateSqsWithAutoReply(
-            request => new AwsSqsClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
+            request => new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
             () => busHolder!);
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sqs: sqs);
         busHolder = bus;
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AwsSqsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
     }
@@ -82,7 +83,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
             sqs: sqs, requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AwsSqsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -104,7 +105,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sqs: sqs);
 
         var replyToEndpoint = new Uri("https://requester-node:5002/");
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), (AwsSqsClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), (ClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
 
         await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -112,8 +113,8 @@ public class AwsSqsClusterMessageBusRequestReplyTests
 
         await sqs.Received(1).SendMessageAsync(
             Arg.Is<SendMessageRequest>(r => r.QueueUrl == expectedReplyQueueUrl &&
-                r.MessageBody.FromNJson<AwsSqsClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
-                r.MessageBody.FromNJson<AwsSqsClusterResponseEnvelope>()!.Success == false),
+                r.MessageBody.FromNJson<ClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
+                r.MessageBody.FromNJson<ClusterResponseEnvelope>()!.Success == false),
             Arg.Any<CancellationToken>());
     }
 
@@ -126,7 +127,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(sqs: sqs);
 
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var act = async () => await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -138,7 +139,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
     {
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new AwsSqsClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -151,7 +152,7 @@ public class AwsSqsClusterMessageBusRequestReplyTests
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

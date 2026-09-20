@@ -23,7 +23,7 @@ public class PulsarClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = await PulsarClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new PulsarClusterRequestEnvelope(Guid.NewGuid(), PulsarClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -40,7 +40,7 @@ public class PulsarClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = await PulsarClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new PulsarClusterRequestEnvelope(Guid.NewGuid(), PulsarClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -69,10 +69,10 @@ public class PulsarClusterMessageBusSubscriptionFetchTests
         var call = transport.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(IPulsarClusterTransport.PublishAsync));
         var publishedJson = (string)call.GetArguments()[1]!;
-        var sentRequest = publishedJson.FromNJson<PulsarClusterRequestEnvelope>()!;
+        var sentRequest = publishedJson.FromNJson<ClusterRequestEnvelope>()!;
 
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-9", "req-9", "conn-9") };
-        bus.TryCompletePendingRequest(new PulsarClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
 
         var result = await fetchTask;
 

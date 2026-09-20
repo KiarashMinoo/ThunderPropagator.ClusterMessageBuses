@@ -1,3 +1,5 @@
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 {
     /// <summary>
@@ -9,6 +11,6 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
     internal interface IZeroMqPeerConnection : IDisposable
     {
         /// <summary>Queues <paramref name="frame"/> for sending to this connection's peer. Safe to call from any thread.</summary>
-        void SendFrame(ZeroMqClusterFrame frame);
+        void SendFrame(ClusterFrame frame);
     }
 }

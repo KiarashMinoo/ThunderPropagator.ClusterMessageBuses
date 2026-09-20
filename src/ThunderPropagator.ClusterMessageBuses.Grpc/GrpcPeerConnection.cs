@@ -24,19 +24,31 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
         // applies to System.Net.WebSockets.WebSocket.SendAsync.
         private readonly SemaphoreSlim _fanOutWriteLock = new(1, 1);
         private readonly SemaphoreSlim _subscriptionSyncWriteLock = new(1, 1);
+        private readonly SemaphoreSlim _byteFanOutWriteLock = new(1, 1);
 
         internal AsyncDuplexStreamingCall<PushedMessageBatch, PushedMessageBatch> FanOutCall { get; }
         internal AsyncDuplexStreamingCall<SubscriptionEvent, SubscriptionAck> SubscriptionSyncCall { get; }
+
+        /// <summary>
+        /// Byte-oriented counterpart to <see cref="FanOutCall"/> -- see <c>ClusterByteMessage</c>'s
+        /// own doc comment. Nullable, and <paramref name="byteFanOutClient"/> is an optional trailing
+        /// constructor parameter (rather than inserted alongside the other two clients), so existing
+        /// call sites/tests that construct a <see cref="GrpcPeerConnection"/> without one — exercising
+        /// only the pre-existing <c>ClusterFanOutMessage</c>-based surface — keep compiling unchanged.
+        /// </summary>
+        internal AsyncDuplexStreamingCall<PushedByteMessageBatch, PushedByteMessageBatch>? ByteFanOutCall { get; }
 
         internal GrpcPeerConnection(
             ClusterFanOut.ClusterFanOutClient fanOutClient,
             ClusterSubscriptionSync.ClusterSubscriptionSyncClient subscriptionSyncClient,
             CancellationToken cancellationToken,
-            GrpcChannel? channel = null)
+            GrpcChannel? channel = null,
+            ClusterByteFanOut.ClusterByteFanOutClient? byteFanOutClient = null)
         {
             _channel = channel;
             FanOutCall = fanOutClient.Stream(cancellationToken: cancellationToken);
             SubscriptionSyncCall = subscriptionSyncClient.Stream(cancellationToken: cancellationToken);
+            ByteFanOutCall = byteFanOutClient?.Stream(cancellationToken: cancellationToken);
         }
 
         internal async Task SendFanOutAsync(PushedMessageBatch message, CancellationToken cancellationToken)
@@ -65,6 +77,23 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             }
         }
 
+        /// <summary>Byte-oriented counterpart to <see cref="SendFanOutAsync"/> -- see <c>ClusterByteMessage</c>'s own doc comment.</summary>
+        internal async Task SendByteFanOutAsync(PushedByteMessageBatch message, CancellationToken cancellationToken)
+        {
+            if (ByteFanOutCall is null)
+                throw new InvalidOperationException($"{nameof(GrpcPeerConnection)} was constructed without a byte fan-out client.");
+
+            await _byteFanOutWriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await ByteFanOutCall.RequestStream.WriteAsync(message).ConfigureAwait(false);
+            }
+            finally
+            {
+                _byteFanOutWriteLock.Release();
+            }
+        }
+
         public async ValueTask DisposeAsync()
         {
             try
@@ -85,8 +114,21 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
                 // Best-effort, same reasoning as above.
             }
 
+            if (ByteFanOutCall is not null)
+            {
+                try
+                {
+                    await ByteFanOutCall.RequestStream.CompleteAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Best-effort, same reasoning as above.
+                }
+            }
+
             FanOutCall.Dispose();
             SubscriptionSyncCall.Dispose();
+            ByteFanOutCall?.Dispose();
 
             if (_channel is not null)
             {

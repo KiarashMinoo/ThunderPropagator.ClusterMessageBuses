@@ -44,8 +44,12 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
 
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<KafkaClusterResponseEnvelope>> _pendingRequests = new();
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
+
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
         private readonly Task _requestListenerLoop;
         private readonly Task _replyListenerLoop;
@@ -62,7 +66,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
             Func<ProducerConfig, IProducer<string, string>>? producerFactory = null,
-            Func<ConsumerConfig, IConsumer<string, string>>? consumerFactory = null)
+            Func<ConsumerConfig, IConsumer<string, string>>? consumerFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -71,6 +76,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
                     $"{nameof(KafkaClusterMessageBus)} to identify this node's request/reply topics.");
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<KafkaClusterMessageBus>();
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             var producerConfig = new ProducerConfig { BootstrapServers = _options.BootstrapServers };
             _options.ConfigureProducer?.Invoke(producerConfig);
@@ -121,10 +127,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
                 }
             }
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves as channels
             // unsubscribe — but if the whole bus is torn down first (e.g. host shutdown) without
@@ -140,6 +143,11 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             _requestConsumer.Close();

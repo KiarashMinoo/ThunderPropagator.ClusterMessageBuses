@@ -4,6 +4,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.GcpPubSub;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.GcpPubSub;
 
@@ -17,7 +18,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
     /// a real poll loop or real GCP resources.
     /// </summary>
     private static PublisherServiceApiClient CreatePublisherWithAutoReply(
-        Func<GcpPubSubClusterRequestEnvelope, GcpPubSubClusterResponseEnvelope> buildResponse,
+        Func<ClusterRequestEnvelope, ClusterResponseEnvelope> buildResponse,
         Func<GcpPubSubClusterMessageBus> bus)
     {
         var publisher = GcpPubSubClusterMessageBusTestHelpers.CreatePublisherSubstitute();
@@ -28,7 +29,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
                 var messages = (IEnumerable<PubsubMessage>)callInfo[1];
                 if (topicName.TopicId.Contains("-requests-"))
                 {
-                    var parsedRequest = messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterRequestEnvelope>();
+                    var parsedRequest = messages.Single().Data.ToStringUtf8().FromNJson<ClusterRequestEnvelope>();
                     if (parsedRequest is not null)
                     {
                         var response = buildResponse(parsedRequest);
@@ -47,14 +48,14 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
     {
         GcpPubSubClusterMessageBus? busHolder = null;
         var publisher = CreatePublisherWithAutoReply(
-            request => new GcpPubSubClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            request => new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => busHolder!);
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(publisher: publisher);
         busHolder = bus;
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), GcpPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be("\"payload\"");
@@ -65,14 +66,14 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
     {
         GcpPubSubClusterMessageBus? busHolder = null;
         var publisher = CreatePublisherWithAutoReply(
-            request => new GcpPubSubClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
+            request => new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
             () => busHolder!);
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(publisher: publisher);
         busHolder = bus;
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), GcpPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
     }
@@ -86,7 +87,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
             publisher: publisher, requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), GcpPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -108,7 +109,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(publisher: publisher);
 
         var replyToEndpoint = new Uri("https://requester-node:5002/");
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), (GcpPubSubClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), (ClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
 
         await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -117,8 +118,8 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
         await publisher.Received(1).PublishAsync(
             Arg.Is<TopicName>(t => t.TopicId == expectedReplyTopicId),
             Arg.Is<IEnumerable<PubsubMessage>>(messages =>
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
-                messages.Single().Data.ToStringUtf8().FromNJson<GcpPubSubClusterResponseEnvelope>()!.Success == false),
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
+                messages.Single().Data.ToStringUtf8().FromNJson<ClusterResponseEnvelope>()!.Success == false),
             Arg.Any<CancellationToken>());
     }
 
@@ -131,7 +132,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(publisher: publisher);
 
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var act = async () => await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -143,7 +144,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
     {
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new GcpPubSubClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -156,7 +157,7 @@ public class GcpPubSubClusterMessageBusRequestReplyTests
 
         await using var bus = await GcpPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new GcpPubSubClusterRequestEnvelope(Guid.NewGuid(), GcpPubSubClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

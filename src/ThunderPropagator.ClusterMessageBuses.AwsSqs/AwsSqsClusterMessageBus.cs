@@ -71,8 +71,12 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
 
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<AwsSqsClusterResponseEnvelope>> _pendingRequests = new();
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
+
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -87,7 +91,8 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IAmazonSQS>>? sqsFactory = null,
-            Func<CancellationToken, Task<IAmazonSimpleNotificationService>>? snsFactory = null)
+            Func<CancellationToken, Task<IAmazonSimpleNotificationService>>? snsFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -98,6 +103,7 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             _logger = loggerFactory.CreateLogger<AwsSqsClusterMessageBus>();
             _sqsFactory = sqsFactory ?? DefaultSqsFactoryAsync;
             _snsFactory = snsFactory ?? DefaultSnsFactoryAsync;
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -307,10 +313,7 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             // Callers are expected to dispose each SubscribeAsync handle themselves — but if the
             // whole bus is torn down first without that happening, every still-open subscription
@@ -325,6 +328,11 @@ namespace ThunderPropagator.ClusterMessageBuses.AwsSqs
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             try

@@ -8,11 +8,11 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
     /// <summary>
     /// Shared request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="WebSocketClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="ClusterRequestEnvelope"/>
     /// over this node's own outbound connection to the target peer and awaits a matching
-    /// <see cref="WebSocketClusterResponseEnvelope"/> — which, unlike every broker transport in this
+    /// <see cref="ClusterResponseEnvelope"/> — which, unlike every broker transport in this
     /// repo, arrives back over that exact same connection rather than a separate reply channel (see
-    /// <see cref="WebSocketClusterRequestEnvelope"/>'s remarks). Answering side:
+    /// <see cref="ClusterRequestEnvelope"/>'s remarks). Answering side:
     /// <see cref="HandleRequestFrameAsync"/> dispatches to <see cref="BuildResponseAsync"/>,
     /// implemented per request kind in <c>WebSocketClusterMessageBus.Snapshots.cs</c> /
     /// <c>.SubscriptionFetch.cs</c>, then writes the response back via the caller-supplied
@@ -24,9 +24,9 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<WebSocketClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetPeerEndpoint,
-            WebSocketClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -34,16 +34,13 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
-            var tcs = new TaskCompletionSource<WebSocketClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate WebSocket cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
                 var connection = await GetOrCreateOutboundConnectionAsync(targetPeerEndpoint, cancellationToken).ConfigureAwait(false);
-                var frame = new WebSocketClusterFrame(WebSocketClusterFrameKind.Request, request.ToNJson());
+                var frame = new ClusterFrame(ClusterFrameKind.Request, request.ToNJson());
 
                 // Only the send itself is retried/circuit-broken — retrying the full
                 // send-then-await-reply round trip under the same policy would compound the wait
@@ -72,25 +69,25 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>
         /// Answers an inbound request frame by dispatching to <see cref="BuildResponseAsync"/> and
         /// invoking <paramref name="sendResponseAsync"/> with the resulting
-        /// <see cref="WebSocketClusterFrame"/>. Internal (rather than private) so tests can drive it
+        /// <see cref="ClusterFrame"/>. Internal (rather than private) so tests can drive it
         /// directly with a raw payload and a capturing delegate instead of a real connection.
         /// </summary>
         internal async Task HandleRequestFrameAsync(
             string payload,
-            Func<WebSocketClusterFrame, CancellationToken, Task> sendResponseAsync,
+            Func<ClusterFrame, CancellationToken, Task> sendResponseAsync,
             CancellationToken cancellationToken)
         {
-            WebSocketClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payload.FromNJson<WebSocketClusterRequestEnvelope>();
+                request = payload.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -102,7 +99,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
                 return;
 
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
-            var responseFrame = new WebSocketClusterFrame(WebSocketClusterFrameKind.Response, response.ToNJson());
+            var responseFrame = new ClusterFrame(ClusterFrameKind.Response, response.ToNJson());
 
             try
             {
@@ -117,10 +114,10 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal Task HandleResponseDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            WebSocketClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = payload.FromNJson<WebSocketClusterResponseEnvelope>();
+                response = payload.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -138,30 +135,26 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         /// Completes the pending <see cref="SendRequestAsync"/> call matching
         /// <paramref name="response"/>'s correlation id, if one is still waiting.
         /// </summary>
-        internal bool TryCompletePendingRequest(WebSocketClusterResponseEnvelope response)
-        {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
-            return pending.TrySetResult(response);
-        }
-
-        internal async Task<WebSocketClusterResponseEnvelope> BuildResponseAsync(WebSocketClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    WebSocketClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    WebSocketClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    WebSocketClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new WebSocketClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new WebSocketClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

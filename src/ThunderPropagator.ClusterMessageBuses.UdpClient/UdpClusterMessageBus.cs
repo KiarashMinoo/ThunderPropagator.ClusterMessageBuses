@@ -34,7 +34,7 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
     /// The three leader/peer-pull request/reply operations cannot tolerate silent drops the same
     /// way, so <see cref="SendRequestAsync"/> layers its own reliability on top of raw UDP: it
     /// resends the request datagram on a timer (<see cref="UdpClusterMessageBusOptions.ResendInterval"/>)
-    /// until either a matching <see cref="UdpClusterResponseEnvelope"/> arrives or the overall
+    /// until either a matching <see cref="ClusterResponseEnvelope"/> arrives or the overall
     /// <see cref="UdpClusterMessageBusOptions.RequestTimeout"/> elapses — no other transport in this
     /// repo needs to resend the request itself, since TCP/WebSocket/every broker already guarantee
     /// in-order, exactly-once delivery of whatever they did manage to send.
@@ -65,9 +65,18 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         private volatile bool _initialized;
         private IUdpClusterSocket? _socket;
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<UdpClusterResponseEnvelope>> _pendingRequests = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
+
+        /// <summary>
+        /// Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests --
+        /// see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment. Left unregistered by a
+        /// channel-based consumer (nothing here requires it); a non-channel consumer registers its
+        /// own implementation.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -79,7 +88,8 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
             IClusterNodeDiscovery discovery,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IUdpClusterSocket>>? socketFactory = null,
-            Func<Uri, CancellationToken, Task<IPEndPoint>>? peerEndpointResolver = null)
+            Func<Uri, CancellationToken, Task<IPEndPoint>>? peerEndpointResolver = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -91,6 +101,7 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
             _logger = loggerFactory.CreateLogger<UdpClusterMessageBus>();
             _socketFactory = socketFactory ?? DefaultSocketFactoryAsync;
             _peerEndpointResolver = peerEndpointResolver ?? ((peer, ct) => UdpAddressing.ResolveEndpointAsync(peer, _options.Port, ct));
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -155,11 +166,11 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 
         internal async Task DispatchDatagramAsync(UdpReceivedDatagram datagram, CancellationToken cancellationToken)
         {
-            UdpClusterFrame? frame;
+            ClusterFrame? frame;
             try
             {
                 frame = System.Text.Encoding.UTF8.GetString(datagram.Payload)
-                    .FromNJson<UdpClusterFrame>();
+                    .FromNJson<ClusterFrame>();
             }
             catch (Exception exception)
             {
@@ -172,21 +183,24 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 
             switch (frame.Kind)
             {
-                case UdpClusterFrameKind.FanOut:
+                case ClusterFrameKind.FanOut:
                     await HandleFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case UdpClusterFrameKind.SubscriptionEvent:
+                case ClusterFrameKind.SubscriptionEvent:
                     await HandleSubscriptionEventDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case UdpClusterFrameKind.Request:
+                case ClusterFrameKind.Request:
                     await HandleRequestFrameAsync(
                         frame.PayloadJson,
                         datagram.RemoteEndPoint,
                         (responseFrame, remoteEndpoint, ct) => SendFrameAsync(responseFrame, remoteEndpoint, ct),
                         cancellationToken).ConfigureAwait(false);
                     break;
-                case UdpClusterFrameKind.Response:
+                case ClusterFrameKind.Response:
                     await HandleResponseDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
+                    break;
+                case ClusterFrameKind.ByteFanOut:
+                    await HandleByteFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
                     Log.UnknownFrameKind(_logger, frame.Kind.ToString());
@@ -195,11 +209,11 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         }
 
         /// <summary>
-        /// Serializes and sends one <see cref="UdpClusterFrame"/> as a single datagram to
+        /// Serializes and sends one <see cref="ClusterFrame"/> as a single datagram to
         /// <paramref name="remoteEndpoint"/>, over this node's shared socket. Internal (rather than
         /// private) so tests can invoke it directly against a substitute socket.
         /// </summary>
-        internal async Task SendFrameAsync(UdpClusterFrame frame, IPEndPoint remoteEndpoint, CancellationToken cancellationToken)
+        internal async Task SendFrameAsync(ClusterFrame frame, IPEndPoint remoteEndpoint, CancellationToken cancellationToken)
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
@@ -221,13 +235,11 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             if (_socket is not null)
             {

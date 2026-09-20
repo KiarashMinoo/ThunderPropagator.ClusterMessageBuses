@@ -44,7 +44,7 @@ public class WebApiClusterMessageBusSnapshotsTests
 
         var body = await bus.BuildSnapshotDeltaResponseBodyAsync("my-channel", since.UtcTicks, CancellationToken.None);
 
-        var payload = body.FromNJson<WebApiSnapshotDeltaPayload>();
+        var payload = body.FromNJson<ClusterSnapshotDeltaPayload>();
         payload.Should().NotBeNull();
     }
 

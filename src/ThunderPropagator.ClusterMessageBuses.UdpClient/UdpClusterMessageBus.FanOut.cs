@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 {
@@ -12,7 +12,7 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
             var stamped = message with { OriginId = _selfId };
-            var frame = new UdpClusterFrame(UdpClusterFrameKind.FanOut, new UdpFanOutPayload(channelKey, stamped).ToNJson());
+            var frame = new ClusterFrame(ClusterFrameKind.FanOut, new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, stamped).ToNJson());
 
             var peers = await _discovery.GetPeersAsync(cancellationToken).ConfigureAwait(false);
 
@@ -35,17 +35,16 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
 
         public override Task<IAsyncDisposable> SubscribeAsync(Guid channelKey, Func<ClusterFanOutMessage, CancellationToken, Task> onMessage, CancellationToken cancellationToken = default)
         {
-            _fanOutHandlers[channelKey] = onMessage;
-            return Task.FromResult<IAsyncDisposable>(new FanOutSubscription(_fanOutHandlers, channelKey));
+            return Task.FromResult(_fanOutHandlers.Register(channelKey, onMessage));
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal async Task HandleFanOutDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            UdpFanOutPayload? fanOut;
+            ClusterChannelEnvelope<ClusterFanOutMessage>? fanOut;
             try
             {
-                fanOut = payload.FromNJson<UdpFanOutPayload>();
+                fanOut = payload.FromNJson<ClusterChannelEnvelope<ClusterFanOutMessage>>();
             }
             catch (Exception exception)
             {
@@ -56,34 +55,13 @@ namespace ThunderPropagator.ClusterMessageBuses.UdpClient
             if (fanOut is null || fanOut.Message.OriginId == _selfId)
                 return;
 
-            if (!_fanOutHandlers.TryGetValue(fanOut.ChannelKey, out var handler))
-                return;
-
             try
             {
-                await handler(fanOut.Message, cancellationToken).ConfigureAwait(false);
+                await _fanOutHandlers.InvokeAsync(fanOut.ChannelKey, fanOut.Message, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
                 Log.FanOutHandlerFaulted(_logger, exception);
-            }
-        }
-
-        private sealed class FanOutSubscription : IAsyncDisposable
-        {
-            private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _handlers;
-            private readonly Guid _channelKey;
-
-            internal FanOutSubscription(ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> handlers, Guid channelKey)
-            {
-                _handlers = handlers;
-                _channelKey = channelKey;
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                _handlers.TryRemove(_channelKey, out _);
-                return ValueTask.CompletedTask;
             }
         }
 

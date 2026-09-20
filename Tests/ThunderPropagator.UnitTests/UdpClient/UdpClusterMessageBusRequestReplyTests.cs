@@ -4,6 +4,7 @@ using System.Threading;
 using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.UdpClient;
 
 namespace ThunderPropagator.UnitTests.UdpClient;
@@ -12,7 +13,7 @@ public class UdpClusterMessageBusRequestReplyTests
 {
     /// <summary>
     /// Builds a socket substitute whose <c>SendDatagramAsync</c>, on every call carrying a
-    /// <see cref="UdpClusterFrameKind.Request"/> frame, invokes <paramref name="maybeRespond"/> with
+    /// <see cref="ClusterFrameKind.Request"/> frame, invokes <paramref name="maybeRespond"/> with
     /// the decoded request and the 1-based attempt number for that correlation id; if it returns a
     /// non-null response, the socket synchronously turns around and delivers it back into
     /// <paramref name="bus"/> via <see cref="UdpClusterMessageBus.HandleResponseDeliveryAsync"/> —
@@ -20,7 +21,7 @@ public class UdpClusterMessageBusRequestReplyTests
     /// simulates that attempt's datagram being silently dropped, letting tests exercise the resend loop.
     /// </summary>
     private static IUdpClusterSocket CreateSocketWithScriptedReplies(
-        Func<UdpClusterRequestEnvelope, int, UdpClusterResponseEnvelope?> maybeRespond,
+        Func<ClusterRequestEnvelope, int, ClusterResponseEnvelope?> maybeRespond,
         Func<UdpClusterMessageBus> bus)
     {
         var attemptsByCorrelationId = new Dictionary<Guid, int>();
@@ -30,10 +31,10 @@ public class UdpClusterMessageBusRequestReplyTests
             .Returns(callInfo =>
             {
                 var bytes = (byte[])callInfo[0];
-                var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-                if (frame is { Kind: UdpClusterFrameKind.Request })
+                var frame = Encoding.UTF8.GetString(bytes).FromNJson<ClusterFrame>();
+                if (frame is { Kind: ClusterFrameKind.Request })
                 {
-                    var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>()!;
+                    var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
                     var attempt = attemptsByCorrelationId[request.CorrelationId] =
                         attemptsByCorrelationId.GetValueOrDefault(request.CorrelationId) + 1;
 
@@ -52,14 +53,14 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         UdpClusterMessageBus? busHolder = null;
         var socket = CreateSocketWithScriptedReplies(
-            (request, _) => new UdpClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            (request, _) => new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => busHolder!);
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(socket: socket);
         busHolder = bus;
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be("\"payload\"");
@@ -70,14 +71,14 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         UdpClusterMessageBus? busHolder = null;
         var socket = CreateSocketWithScriptedReplies(
-            (request, _) => new UdpClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
+            (request, _) => new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
             () => busHolder!);
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(socket: socket);
         busHolder = bus;
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
     }
@@ -90,7 +91,7 @@ public class UdpClusterMessageBusRequestReplyTests
         // since every other transport's underlying protocol guarantees delivery of what it did send.
         UdpClusterMessageBus? busHolder = null;
         var socket = CreateSocketWithScriptedReplies(
-            (request, attempt) => attempt < 2 ? null : new UdpClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            (request, attempt) => attempt < 2 ? null : new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => busHolder!);
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(
@@ -100,7 +101,7 @@ public class UdpClusterMessageBusRequestReplyTests
         busHolder = bus;
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
 
@@ -121,7 +122,7 @@ public class UdpClusterMessageBusRequestReplyTests
             requestTimeout: TimeSpan.FromMilliseconds(80));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
 
@@ -135,8 +136,8 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var responsesSent = new List<(UdpClusterFrame Frame, IPEndPoint Endpoint)>();
-        Task CaptureResponse(UdpClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) { responsesSent.Add((frame, endpoint)); return Task.CompletedTask; }
+        var responsesSent = new List<(ClusterFrame Frame, IPEndPoint Endpoint)>();
+        Task CaptureResponse(ClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) { responsesSent.Add((frame, endpoint)); return Task.CompletedTask; }
 
         var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 6300);
         var act = async () => await bus.HandleRequestFrameAsync("{ not valid json ", remoteEndpoint, CaptureResponse, CancellationToken.None);
@@ -150,20 +151,20 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var responsesSent = new List<(UdpClusterFrame Frame, IPEndPoint Endpoint)>();
-        Task CaptureResponse(UdpClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) { responsesSent.Add((frame, endpoint)); return Task.CompletedTask; }
+        var responsesSent = new List<(ClusterFrame Frame, IPEndPoint Endpoint)>();
+        Task CaptureResponse(ClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) { responsesSent.Add((frame, endpoint)); return Task.CompletedTask; }
 
         var correlationId = Guid.NewGuid();
-        var request = new UdpClusterRequestEnvelope(correlationId, (UdpClusterRequestKind)999, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(correlationId, (ClusterRequestKind)999, null, Guid.NewGuid(), null);
         var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 6300);
 
         await bus.HandleRequestFrameAsync(request.ToNJson(), remoteEndpoint, CaptureResponse, CancellationToken.None);
 
         responsesSent.Should().HaveCount(1);
         responsesSent[0].Endpoint.Should().Be(remoteEndpoint);
-        responsesSent[0].Frame.Kind.Should().Be(UdpClusterFrameKind.Response);
+        responsesSent[0].Frame.Kind.Should().Be(ClusterFrameKind.Response);
 
-        var response = responsesSent[0].Frame.PayloadJson.FromNJson<UdpClusterResponseEnvelope>()!;
+        var response = responsesSent[0].Frame.PayloadJson.FromNJson<ClusterResponseEnvelope>()!;
         response.CorrelationId.Should().Be(correlationId);
         response.Success.Should().BeFalse();
     }
@@ -173,9 +174,9 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        Task ThrowingSend(UdpClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) => throw new InvalidOperationException("simulated send failure");
+        Task ThrowingSend(ClusterFrame frame, IPEndPoint endpoint, CancellationToken ct) => throw new InvalidOperationException("simulated send failure");
 
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
         var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 6300);
 
         var act = async () => await bus.HandleRequestFrameAsync(request.ToNJson(), remoteEndpoint, ThrowingSend, CancellationToken.None);
@@ -188,7 +189,7 @@ public class UdpClusterMessageBusRequestReplyTests
     {
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new UdpClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -201,7 +202,7 @@ public class UdpClusterMessageBusRequestReplyTests
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

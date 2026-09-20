@@ -8,8 +8,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
     /// <summary>
     /// Shared request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="MqttClusterRequestEnvelope"/>
-    /// to the target's request topic and awaits a matching <see cref="MqttClusterResponseEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="ClusterRequestEnvelope"/>
+    /// to the target's request topic and awaits a matching <see cref="ClusterResponseEnvelope"/>
     /// on this node's own reply topic. Answering side: <see cref="RunRequestListenerLoopAsync"/>
     /// consumes this node's own request topic and dispatches to <see cref="BuildResponseAsync"/>,
     /// implemented per request kind in <c>MqttClusterMessageBus.Snapshots.cs</c> /
@@ -22,9 +22,9 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<MqttClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            MqttClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -32,11 +32,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new MqttClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<MqttClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate MQTT cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -70,7 +67,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
@@ -107,10 +104,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal async Task HandleRequestDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            MqttClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payload.FromNJson<MqttClusterRequestEnvelope>();
+                request = payload.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -127,10 +124,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal Task HandleReplyDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            MqttClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = payload.FromNJson<MqttClusterResponseEnvelope>();
+                response = payload.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -150,20 +147,15 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
         /// <see cref="HandleReplyDeliveryAsync"/> (the real, only production caller) and tests, which
         /// use it to complete a round trip deterministically without racing a background consumer.
         /// </summary>
-        internal bool TryCompletePendingRequest(MqttClusterResponseEnvelope response)
-        {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
-        }
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>MqttClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and publishes
         /// the result back to the requester's reply topic.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(MqttClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyTopic = MqttTopicNaming.ReplyTopic(_options.TopicPrefix, request.ReplyToNodeEndpoint);
@@ -178,22 +170,23 @@ namespace ThunderPropagator.ClusterMessageBuses.Mqtt
             }
         }
 
-        internal async Task<MqttClusterResponseEnvelope> BuildResponseAsync(MqttClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    MqttClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    MqttClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    MqttClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new MqttClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new MqttClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

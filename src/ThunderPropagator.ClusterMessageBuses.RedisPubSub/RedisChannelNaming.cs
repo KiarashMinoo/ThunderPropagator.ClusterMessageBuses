@@ -23,6 +23,10 @@ namespace ThunderPropagator.ClusterMessageBuses.RedisPubSub
         internal static string SubscriptionEventChannel(string channelPrefix, Guid channelKey)
             => $"{channelPrefix}:subscriptions:{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out channel for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own channel namespace rather than sharing <see cref="FanOutChannel"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutChannel(string channelPrefix, Guid channelKey)
+            => $"{channelPrefix}:bytefanout:{channelKey:N}";
+
         /// <summary>The channel a node listens on for inbound requests addressed to it.</summary>
         internal static string RequestChannel(string channelPrefix, Uri nodeEndpoint)
             => $"{channelPrefix}:requests:{Slugify(nodeEndpoint)}";

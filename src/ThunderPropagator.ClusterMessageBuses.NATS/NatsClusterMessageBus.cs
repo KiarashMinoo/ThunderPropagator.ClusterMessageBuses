@@ -45,6 +45,10 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
 
         private readonly ConcurrentDictionary<Guid, FanOutSubscription> _fanOutSubscriptions = new();
         private readonly ConcurrentDictionary<Guid, SubscriptionEventSubscription> _subscriptionEventSubscriptions = new();
+        private readonly ConcurrentDictionary<Guid, ByteFanOutSubscription> _byteFanOutSubscriptions = new();
+
+        /// <summary>Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.</summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly CancellationTokenSource _lifetimeCts = new();
 
@@ -56,7 +60,8 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
             ClusterConfiguration clusterConfiguration,
             IClusterChannelResolver channelResolver,
             ILoggerFactory loggerFactory,
-            INatsClusterTransport? transport = null)
+            INatsClusterTransport? transport = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -66,6 +71,7 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
             _channelResolver = channelResolver;
             _logger = loggerFactory.CreateLogger<NatsClusterMessageBus>();
             _transport = transport ?? new NatsClusterTransport(_options.Url);
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -127,6 +133,11 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
             foreach (var subscriptionEventSubscription in _subscriptionEventSubscriptions.Values.ToArray())
             {
                 await subscriptionEventSubscription.DisposeAsync().ConfigureAwait(false);
+            }
+
+            foreach (var byteFanOutSubscription in _byteFanOutSubscriptions.Values.ToArray())
+            {
+                await byteFanOutSubscription.DisposeAsync().ConfigureAwait(false);
             }
 
             await _transport.DisposeAsync().ConfigureAwait(false);

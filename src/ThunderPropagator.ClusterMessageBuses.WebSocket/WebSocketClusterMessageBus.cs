@@ -38,8 +38,9 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
     /// A WebSocket connection has no native request/reply either (like every transport except NATS),
     /// but unlike the broker transports there is no separate reply channel: since the connection is
     /// inherently bidirectional, the answering side simply writes its
-    /// <see cref="WebSocketClusterResponseEnvelope"/> back over the exact same connection the
-    /// request arrived on — see <c>WebSocketClusterRequestEnvelope</c>'s remarks.
+    /// <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterResponseEnvelope"/> back
+    /// over the exact same connection the request arrived on — see
+    /// <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterRequestEnvelope"/>'s remarks.
     /// </para>
     /// </remarks>
     internal sealed partial class WebSocketClusterMessageBus : AbstractClusterMessageBus, IAsyncDisposable
@@ -63,9 +64,15 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 
         private readonly ClusterConnectionCache<WebSocketPeerConnection> _outboundConnections;
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<WebSocketClusterResponseEnvelope>> _pendingRequests = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
+
+        /// <summary>
+        /// Answers this node's own <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -77,7 +84,8 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
             IClusterNodeDiscovery discovery,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IWebSocketClusterListener>>? listenerFactory = null,
-            Func<Uri, CancellationToken, Task<System.Net.WebSockets.WebSocket>>? outboundSocketFactory = null)
+            Func<Uri, CancellationToken, Task<System.Net.WebSockets.WebSocket>>? outboundSocketFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -90,6 +98,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
             _listenerFactory = listenerFactory ?? DefaultListenerFactoryAsync;
             _outboundSocketFactory = outboundSocketFactory ?? DefaultOutboundSocketFactoryAsync;
             _outboundConnections = new ClusterConnectionCache<WebSocketPeerConnection>(ConnectToPeerAsync);
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -186,24 +195,27 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
             }
         }
 
-        internal async Task DispatchFrameAsync(WebSocketPeerConnection connection, WebSocketClusterFrame frame, CancellationToken cancellationToken)
+        internal async Task DispatchFrameAsync(WebSocketPeerConnection connection, ClusterFrame frame, CancellationToken cancellationToken)
         {
             switch (frame.Kind)
             {
-                case WebSocketClusterFrameKind.FanOut:
+                case ClusterFrameKind.FanOut:
                     await HandleFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case WebSocketClusterFrameKind.SubscriptionEvent:
+                case ClusterFrameKind.SubscriptionEvent:
                     await HandleSubscriptionEventDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case WebSocketClusterFrameKind.Request:
+                case ClusterFrameKind.Request:
                     await HandleRequestFrameAsync(
                         frame.PayloadJson,
                         (responseFrame, ct) => connection.SendFrameAsync(responseFrame, ct),
                         cancellationToken).ConfigureAwait(false);
                     break;
-                case WebSocketClusterFrameKind.Response:
+                case ClusterFrameKind.Response:
                     await HandleResponseDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
+                    break;
+                case ClusterFrameKind.ByteFanOut:
+                    await HandleByteFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
                     Log.UnknownFrameKind(_logger, frame.Kind.ToString());
@@ -234,13 +246,11 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             await _outboundConnections.DisposeAsync().ConfigureAwait(false);
 

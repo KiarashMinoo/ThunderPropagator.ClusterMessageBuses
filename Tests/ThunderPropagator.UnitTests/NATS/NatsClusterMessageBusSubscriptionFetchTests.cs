@@ -23,7 +23,7 @@ public class NatsClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -40,7 +40,7 @@ public class NatsClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

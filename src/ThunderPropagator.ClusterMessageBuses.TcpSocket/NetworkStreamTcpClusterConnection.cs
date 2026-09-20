@@ -3,12 +3,13 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 {
     /// <summary>
     /// Production <see cref="ITcpClusterConnection"/>: wraps a real <see cref="TcpClient"/>'s
-    /// <see cref="NetworkStream"/>, framing every <see cref="TcpClusterFrame"/> as a 4-byte
+    /// <see cref="NetworkStream"/>, framing every <see cref="ClusterFrame"/> as a 4-byte
     /// big-endian length prefix followed by its UTF8 NJson bytes.
     /// </summary>
     internal sealed class NetworkStreamTcpClusterConnection : ITcpClusterConnection
@@ -25,7 +26,7 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             _maxFrameSize = maxFrameSize;
         }
 
-        public async Task SendFrameAsync(TcpClusterFrame frame, CancellationToken cancellationToken)
+        public async Task SendFrameAsync(ClusterFrame frame, CancellationToken cancellationToken)
         {
             var payloadBytes = Encoding.UTF8.GetBytes(frame.ToNJson());
             var lengthPrefix = new byte[4];
@@ -44,7 +45,7 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             }
         }
 
-        public async IAsyncEnumerable<TcpClusterFrame> ReceiveFramesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<ClusterFrame> ReceiveFramesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var lengthBuffer = new byte[4];
 
@@ -65,11 +66,11 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 
                 var payload = Encoding.UTF8.GetString(payloadBuffer);
 
-                TcpClusterFrame? frame = null;
+                ClusterFrame? frame = null;
                 var parsed = false;
                 try
                 {
-                    frame = payload.FromNJson<TcpClusterFrame>();
+                    frame = payload.FromNJson<ClusterFrame>();
                     parsed = true;
                 }
                 catch (Exception)

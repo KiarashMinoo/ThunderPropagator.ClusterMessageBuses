@@ -3,6 +3,7 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.AzureServiceBus;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.AzureServiceBus;
 
@@ -16,7 +17,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
     /// poll loop or a live Service Bus namespace.
     /// </summary>
     private static ServiceBusClient CreateClientWithAutoReply(
-        Func<AzureServiceBusClusterRequestEnvelope, AzureServiceBusClusterResponseEnvelope> buildResponse,
+        Func<ClusterRequestEnvelope, ClusterResponseEnvelope> buildResponse,
         Func<AzureServiceBusClusterMessageBus> bus)
     {
         ServiceBusSender SenderFactory(string entityName)
@@ -29,7 +30,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
                     .Returns(callInfo =>
                     {
                         var message = (ServiceBusMessage)callInfo[0];
-                        var parsedRequest = message.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>();
+                        var parsedRequest = message.Body.ToString().FromNJson<ClusterRequestEnvelope>();
                         if (parsedRequest is not null)
                         {
                             var response = buildResponse(parsedRequest);
@@ -50,14 +51,14 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
     {
         AzureServiceBusClusterMessageBus? busHolder = null;
         var client = CreateClientWithAutoReply(
-            request => new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            request => new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => busHolder!);
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(client: client);
         busHolder = bus;
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be("\"payload\"");
@@ -68,14 +69,14 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
     {
         AzureServiceBusClusterMessageBus? busHolder = null;
         var client = CreateClientWithAutoReply(
-            request => new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
+            request => new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
             () => busHolder!);
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(client: client);
         busHolder = bus;
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
     }
@@ -86,7 +87,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -109,7 +110,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(client: client);
 
         var replyToEndpoint = new Uri("https://requester-node:5002/");
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), (AzureServiceBusClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), (ClusterRequestKind)999, null, Guid.NewGuid(), null, replyToEndpoint);
 
         await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -118,8 +119,8 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
         client.Received(1).CreateSender(expectedReplyQueueName);
         await sender.Received(1).SendMessageAsync(
             Arg.Is<ServiceBusMessage>(m =>
-                m.Body.ToString().FromNJson<AzureServiceBusClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
-                m.Body.ToString().FromNJson<AzureServiceBusClusterResponseEnvelope>()!.Success == false),
+                m.Body.ToString().FromNJson<ClusterResponseEnvelope>()!.CorrelationId == request.CorrelationId &&
+                m.Body.ToString().FromNJson<ClusterResponseEnvelope>()!.Success == false),
             Arg.Any<CancellationToken>());
     }
 
@@ -133,7 +134,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(client: client);
 
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var act = async () => await bus.HandleIncomingRequestAsync(request, CancellationToken.None);
 
@@ -145,7 +146,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
     {
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new AzureServiceBusClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -158,7 +159,7 @@ public class AzureServiceBusClusterMessageBusRequestReplyTests
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, new Uri("https://requester:5002/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

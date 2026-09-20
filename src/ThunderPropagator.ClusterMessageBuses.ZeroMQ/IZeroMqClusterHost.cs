@@ -1,4 +1,5 @@
 using NetMQ;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 {
@@ -11,7 +12,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
     internal interface IZeroMqClusterHost : IAsyncDisposable
     {
         /// <summary>Queues a reply frame addressed to <paramref name="identity"/> (the routing frame the ROUTER read the original request with) for sending on the ROUTER socket. Safe to call from any thread.</summary>
-        void SendReply(byte[] identity, ZeroMqClusterFrame frame);
+        void SendReply(byte[] identity, ClusterFrame frame);
 
         /// <summary>Registers a peer connection's DEALER socket/outbound queue on the shared poller this host owns.</summary>
         void AddPollable(ISocketPollable pollable);

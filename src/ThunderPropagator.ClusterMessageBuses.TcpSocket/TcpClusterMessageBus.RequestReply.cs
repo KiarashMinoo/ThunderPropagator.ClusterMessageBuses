@@ -8,10 +8,10 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
     /// <summary>
     /// Shared request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="TcpClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="ClusterRequestEnvelope"/>
     /// over this node's own outbound connection to the target peer and awaits a matching
-    /// <see cref="TcpClusterResponseEnvelope"/> — which arrives back over that exact same connection
-    /// rather than a separate reply channel (see <see cref="TcpClusterRequestEnvelope"/>'s remarks).
+    /// <see cref="ClusterResponseEnvelope"/> — which arrives back over that exact same connection
+    /// rather than a separate reply channel (see <see cref="ClusterRequestEnvelope"/>'s remarks).
     /// Answering side: <see cref="HandleRequestFrameAsync"/> dispatches to <see cref="BuildResponseAsync"/>,
     /// implemented per request kind in <c>TcpClusterMessageBus.Snapshots.cs</c> /
     /// <c>.SubscriptionFetch.cs</c>, then writes the response back via the caller-supplied
@@ -23,9 +23,9 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<TcpClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetPeerEndpoint,
-            TcpClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -33,16 +33,13 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
-            var tcs = new TaskCompletionSource<TcpClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate TCP cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
                 var connection = await GetOrCreateOutboundConnectionAsync(targetPeerEndpoint, cancellationToken).ConfigureAwait(false);
-                var frame = new TcpClusterFrame(TcpClusterFrameKind.Request, request.ToNJson());
+                var frame = new ClusterFrame(ClusterFrameKind.Request, request.ToNJson());
 
                 // Only the send itself is retried/circuit-broken — retrying the full
                 // send-then-await-reply round trip under the same policy would compound the wait
@@ -71,25 +68,25 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>
         /// Answers an inbound request frame by dispatching to <see cref="BuildResponseAsync"/> and
-        /// invoking <paramref name="sendResponseAsync"/> with the resulting <see cref="TcpClusterFrame"/>.
+        /// invoking <paramref name="sendResponseAsync"/> with the resulting <see cref="ClusterFrame"/>.
         /// Internal (rather than private) so tests can drive it directly with a raw payload and a
         /// capturing delegate instead of a real connection.
         /// </summary>
         internal async Task HandleRequestFrameAsync(
             string payload,
-            Func<TcpClusterFrame, CancellationToken, Task> sendResponseAsync,
+            Func<ClusterFrame, CancellationToken, Task> sendResponseAsync,
             CancellationToken cancellationToken)
         {
-            TcpClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payload.FromNJson<TcpClusterRequestEnvelope>();
+                request = payload.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -101,7 +98,7 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
                 return;
 
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
-            var responseFrame = new TcpClusterFrame(TcpClusterFrameKind.Response, response.ToNJson());
+            var responseFrame = new ClusterFrame(ClusterFrameKind.Response, response.ToNJson());
 
             try
             {
@@ -116,10 +113,10 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal Task HandleResponseDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            TcpClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = payload.FromNJson<TcpClusterResponseEnvelope>();
+                response = payload.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -137,30 +134,28 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         /// Completes the pending <see cref="SendRequestAsync"/> call matching
         /// <paramref name="response"/>'s correlation id, if one is still waiting.
         /// </summary>
-        internal bool TryCompletePendingRequest(TcpClusterResponseEnvelope response)
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response)
         {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
+            return _pendingRequests.TryComplete(response.CorrelationId, () => response);
         }
 
-        internal async Task<TcpClusterResponseEnvelope> BuildResponseAsync(TcpClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    TcpClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    TcpClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    TcpClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new TcpClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new TcpClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

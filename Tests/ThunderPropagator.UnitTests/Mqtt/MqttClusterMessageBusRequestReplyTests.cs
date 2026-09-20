@@ -2,18 +2,19 @@ using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
 using ThunderPropagator.ClusterMessageBuses.Mqtt;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.UnitTests.Mqtt;
 
 public class MqttClusterMessageBusRequestReplyTests
 {
-    private static MqttClusterRequestEnvelope CapturePublishedRequest(IMqttClusterTransport transport)
+    private static ClusterRequestEnvelope CapturePublishedRequest(IMqttClusterTransport transport)
     {
         var call = transport.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(IMqttClusterTransport.PublishAsync));
         var publishedJson = (string)call.GetArguments()[1]!;
 
-        return publishedJson.FromNJson<MqttClusterRequestEnvelope>()!;
+        return publishedJson.FromNJson<ClusterRequestEnvelope>()!;
     }
 
     [Fact]
@@ -22,7 +23,7 @@ public class MqttClusterMessageBusRequestReplyTests
         await using var bus = await MqttClusterMessageBusTestHelpers.CreateBusAsync(requestTimeout: TimeSpan.FromMilliseconds(50));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), MqttClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -34,7 +35,7 @@ public class MqttClusterMessageBusRequestReplyTests
 
         using var cts = new CancellationTokenSource();
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), MqttClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, cts.Token);
 
         cts.Cancel();
 
@@ -50,12 +51,12 @@ public class MqttClusterMessageBusRequestReplyTests
         await using var bus = await MqttClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), MqttClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(transport);
         var expectedPayload = "[{\"SubscriptionId\":\"sub-9\"}]";
 
-        var completed = bus.TryCompletePendingRequest(new MqttClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, expectedPayload));
 
         completed.Should().BeTrue();
 
@@ -71,11 +72,11 @@ public class MqttClusterMessageBusRequestReplyTests
         await using var bus = await MqttClusterMessageBusTestHelpers.CreateBusAsync(transport: transport, requestTimeout: TimeSpan.FromSeconds(5));
 
         var task = bus.SendRequestAsync(
-            new Uri("https://peer:5001/"), MqttClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         var sentRequest = CapturePublishedRequest(transport);
 
-        var completed = bus.TryCompletePendingRequest(new MqttClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
+        var completed = bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, false, "channel not found", null));
         completed.Should().BeTrue();
 
         var act = async () => await task;
@@ -88,7 +89,7 @@ public class MqttClusterMessageBusRequestReplyTests
     {
         await using var bus = await MqttClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new MqttClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }

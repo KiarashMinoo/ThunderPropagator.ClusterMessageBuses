@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
@@ -37,8 +36,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
 
         public override Task<IAsyncDisposable> SubscribeAsync(Guid channelKey, Func<ClusterFanOutMessage, CancellationToken, Task> onMessage, CancellationToken cancellationToken = default)
         {
-            _fanOutHandlers[channelKey] = onMessage;
-            return Task.FromResult<IAsyncDisposable>(new FanOutSubscription(_fanOutHandlers, channelKey));
+            return Task.FromResult(_fanOutHandlers.Register(channelKey, onMessage));
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw batch, and so <c>ClusterFanOutGrpcService</c> can dispatch inbound deliveries into it.</summary>
@@ -65,34 +63,13 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc
             if (message is null || message.OriginId == _selfId)
                 return;
 
-            if (!_fanOutHandlers.TryGetValue(channelKey, out var handler))
-                return;
-
             try
             {
-                await handler(message, cancellationToken).ConfigureAwait(false);
+                await _fanOutHandlers.InvokeAsync(channelKey, message, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
                 Log.FanOutHandlerFaulted(_logger, exception);
-            }
-        }
-
-        private sealed class FanOutSubscription : IAsyncDisposable
-        {
-            private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _handlers;
-            private readonly Guid _channelKey;
-
-            internal FanOutSubscription(ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> handlers, Guid channelKey)
-            {
-                _handlers = handlers;
-                _channelKey = channelKey;
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                _handlers.TryRemove(_channelKey, out _);
-                return ValueTask.CompletedTask;
             }
         }
 

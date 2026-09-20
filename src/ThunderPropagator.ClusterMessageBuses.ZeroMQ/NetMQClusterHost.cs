@@ -1,6 +1,7 @@
 using NetMQ;
 using NetMQ.Sockets;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 {
@@ -33,7 +34,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
             _routerSocket.Bind(ZeroMqAddressing.BindAddress(nodeEndpoint));
         }
 
-        public void SendReply(byte[] identity, ZeroMqClusterFrame frame) => _outboundReplies.Enqueue((identity, frame.ToNJson()));
+        public void SendReply(byte[] identity, ClusterFrame frame) => _outboundReplies.Enqueue((identity, frame.ToNJson()));
 
         private void OnOutboundRepliesReady(object? sender, NetMQQueueEventArgs<(byte[] Identity, string FrameJson)> e)
         {

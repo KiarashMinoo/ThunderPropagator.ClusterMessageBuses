@@ -23,6 +23,10 @@ namespace ThunderPropagator.ClusterMessageBuses.ActiveMQ
         internal static string SubscriptionEventTopic(string topicPrefix, Guid channelKey)
             => $"{topicPrefix}.subscriptions.{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out topic for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own topic namespace rather than sharing <see cref="FanOutTopic"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutTopic(string topicPrefix, Guid channelKey)
+            => $"{topicPrefix}.bytefanout.{channelKey:N}";
+
         /// <summary>The queue a node listens on for inbound requests addressed to it.</summary>
         internal static string RequestQueue(string topicPrefix, Uri nodeEndpoint)
             => $"{topicPrefix}.requests.{Slugify(nodeEndpoint)}";

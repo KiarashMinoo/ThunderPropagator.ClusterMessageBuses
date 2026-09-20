@@ -23,7 +23,7 @@ public class RabbitMqClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = await RabbitMqClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new RabbitMqClusterRequestEnvelope(Guid.NewGuid(), RabbitMqClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -40,7 +40,7 @@ public class RabbitMqClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = await RabbitMqClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new RabbitMqClusterRequestEnvelope(Guid.NewGuid(), RabbitMqClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -69,10 +69,10 @@ public class RabbitMqClusterMessageBusSubscriptionFetchTests
         var call = channels[0].ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(global::RabbitMQ.Client.IChannel.BasicPublishAsync));
         var publishedBody = (ReadOnlyMemory<byte>)call.GetArguments()[4]!;
-        var sentRequest = System.Text.Encoding.UTF8.GetString(publishedBody.Span).FromNJson<RabbitMqClusterRequestEnvelope>()!;
+        var sentRequest = System.Text.Encoding.UTF8.GetString(publishedBody.Span).FromNJson<ClusterRequestEnvelope>()!;
 
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-9", "req-9", "conn-9") };
-        bus.TryCompletePendingRequest(new RabbitMqClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
 
         var result = await fetchTask;
 

@@ -22,8 +22,8 @@ public class AzureServiceBusClusterMessageBusSubscriptionFetchTests
         sender.SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!;
-                var response = new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -38,8 +38,8 @@ public class AzureServiceBusClusterMessageBusSubscriptionFetchTests
 
         await sender.Received(1).SendMessageAsync(
             Arg.Is<ServiceBusMessage>(m =>
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.Kind == AzureServiceBusClusterRequestKind.FetchSubscriptions &&
-                m.Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!.ChannelKey == channelKey),
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.FetchSubscriptions &&
+                m.Body.ToString().FromNJson<ClusterRequestEnvelope>()!.ChannelKey == channelKey),
             Arg.Any<CancellationToken>());
     }
 
@@ -53,8 +53,8 @@ public class AzureServiceBusClusterMessageBusSubscriptionFetchTests
         sender.SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<AzureServiceBusClusterRequestEnvelope>()!;
-                var response = new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
+                var request = ((ServiceBusMessage)callInfo[0]).Body.ToString().FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -89,7 +89,7 @@ public class AzureServiceBusClusterMessageBusSubscriptionFetchTests
 
         await using var bus = await AzureServiceBusClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), AzureServiceBusClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();

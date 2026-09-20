@@ -49,6 +49,16 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
                         await request.RespondAsync(200, subscriptionsBody).ConfigureAwait(false);
                         break;
 
+                    case WebApiRouteKind.ByteFanOut:
+                        await HandleByteFanOutDeliveryAsync(request.Body, match.ChannelKey!.Value, cancellationToken).ConfigureAwait(false);
+                        await request.RespondAsync(204, "{}").ConfigureAwait(false);
+                        break;
+
+                    case WebApiRouteKind.ByteSnapshot:
+                        var byteSnapshotBody = await BuildByteSnapshotResponseBodyAsync(match.ChannelKey!.Value, cancellationToken).ConfigureAwait(false);
+                        await request.RespondAsync(200, byteSnapshotBody).ConfigureAwait(false);
+                        break;
+
                     default:
                         await request.RespondAsync(404, "{}").ConfigureAwait(false);
                         break;

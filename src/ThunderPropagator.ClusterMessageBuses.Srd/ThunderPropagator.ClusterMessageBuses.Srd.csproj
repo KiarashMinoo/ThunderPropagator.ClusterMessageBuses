@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThunderPropagator.ClusterMessageBuses.SharedKernel\ThunderPropagator.ClusterMessageBuses.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <!--
+    No package reference for libfabric: there is no managed/NuGet package for it. This project binds
+    libfabric.so.1 directly via DllImport (see Native/LibFabricNativeMethods.cs) — the native shared
+    library must already be installed on the host (e.g. `libfabric-dev`/`libfabric-devel`, or AWS's
+    `aws-efa-installer` on an EC2 instance with an Elastic Fabric Adapter attached). Nothing in this
+    .csproj provides or restores that native dependency.
+  -->
+
+</Project>

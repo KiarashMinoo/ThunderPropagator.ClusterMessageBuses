@@ -21,7 +21,7 @@ public class NatsClusterMessageBusSnapshotsTests
         resolver.GetChannel("my-channel").Returns(channel);
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.RestoreSnapshot, "my-channel", null, null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.RestoreSnapshot, "my-channel", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -42,12 +42,12 @@ public class NatsClusterMessageBusSnapshotsTests
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var payload = response.PayloadJson!.FromNJson<NatsSnapshotDeltaPayload>();
+        var payload = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         payload.Should().NotBeNull();
     }
 
@@ -58,7 +58,7 @@ public class NatsClusterMessageBusSnapshotsTests
         resolver.GetChannel("missing-channel").Returns(_ => throw new KeyNotFoundException("no such channel"));
 
         await using var bus = await NatsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new NatsClusterRequestEnvelope(NatsClusterRequestKind.RestoreSnapshot, "missing-channel", null, null);
+        var request = new NatsClusterRequestEnvelope(ClusterRequestKind.RestoreSnapshot, "missing-channel", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

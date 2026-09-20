@@ -39,6 +39,14 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
         internal static string SubscriptionEventSubscription(Uri nodeEndpoint, Guid channelKey)
             => $"se-{ShortHash(nodeEndpoint, channelKey)}";
 
+        /// <summary>Byte-oriented fan-out topic for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own topic namespace rather than sharing <see cref="FanOutTopic"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutTopic(string prefix, Guid channelKey)
+            => $"{prefix}-bytefanout-{channelKey:N}";
+
+        /// <summary>This node's own exclusive subscription on the byte fan-out topic for one channel. Same 50-character-limit reasoning as <see cref="FanOutSubscription"/>, and kept on its own short-hash prefix so it never collides with <see cref="FanOutSubscription"/> or <see cref="SubscriptionEventSubscription"/>.</summary>
+        internal static string ByteFanOutSubscription(Uri nodeEndpoint, Guid channelKey)
+            => $"bfo-{ShortHash(nodeEndpoint, channelKey)}";
+
         /// <summary>
         /// The queue a node listens on for inbound broker-native requests (restore/delta/fetch-
         /// subscriptions) addressed to it. Requesters send directly to this queue by name, using the

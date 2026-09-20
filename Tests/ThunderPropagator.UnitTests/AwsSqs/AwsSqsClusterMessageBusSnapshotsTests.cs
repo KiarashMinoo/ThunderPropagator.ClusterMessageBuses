@@ -47,7 +47,7 @@ public class AwsSqsClusterMessageBusSnapshotsTests
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "orders", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
@@ -63,7 +63,7 @@ public class AwsSqsClusterMessageBusSnapshotsTests
 
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing", null, null, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeFalse();
@@ -82,11 +82,11 @@ public class AwsSqsClusterMessageBusSnapshotsTests
         await using var bus = await AwsSqsClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new AwsSqsClusterRequestEnvelope(Guid.NewGuid(), AwsSqsClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks, new Uri("https://requester:5002/"));
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<AwsSqsSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Should().ContainSingle(e => e.HashKey == 2);
     }
 
@@ -100,8 +100,8 @@ public class AwsSqsClusterMessageBusSnapshotsTests
         sqs.SendMessageAsync(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!;
-                var response = new AwsSqsClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
+                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.FromResult(new SendMessageResponse());
             });
@@ -117,8 +117,8 @@ public class AwsSqsClusterMessageBusSnapshotsTests
 
         await sqs.Received(1).SendMessageAsync(
             Arg.Is<SendMessageRequest>(r => r.QueueUrl == expectedRequestQueueUrl &&
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.Kind == AwsSqsClusterRequestKind.RestoreSnapshot &&
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.ChannelName == "orders"),
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.RestoreSnapshot &&
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.ChannelName == "orders"),
             Arg.Any<CancellationToken>());
     }
 
@@ -133,9 +133,9 @@ public class AwsSqsClusterMessageBusSnapshotsTests
         sqs.SendMessageAsync(Arg.Any<SendMessageRequest>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!;
-                var deltaPayload = new AwsSqsSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
-                var response = new AwsSqsClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
+                var request = ((SendMessageRequest)callInfo[0]).MessageBody.FromNJson<ClusterRequestEnvelope>()!;
+                var deltaPayload = new ClusterSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
                 _ = busHolder!.HandleReplyDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.FromResult(new SendMessageResponse());
             });
@@ -147,8 +147,8 @@ public class AwsSqsClusterMessageBusSnapshotsTests
 
         await sqs.Received(1).SendMessageAsync(
             Arg.Is<SendMessageRequest>(r =>
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.Kind == AwsSqsClusterRequestKind.SyncDelta &&
-                r.MessageBody.FromNJson<AwsSqsClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.SyncDelta &&
+                r.MessageBody.FromNJson<ClusterRequestEnvelope>()!.SinceTicks == since.UtcTicks),
             Arg.Any<CancellationToken>());
     }
 }

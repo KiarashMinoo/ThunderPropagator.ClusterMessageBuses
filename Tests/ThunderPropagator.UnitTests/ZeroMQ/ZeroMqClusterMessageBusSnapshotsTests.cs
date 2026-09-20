@@ -33,11 +33,11 @@ public class ZeroMqClusterMessageBusSnapshotsTests
 
         ZeroMqClusterMessageBus? busHolder = null;
         var connection = ZeroMqClusterMessageBusTestHelpers.CreatePeerConnectionSubstitute();
-        connection.When(c => c.SendFrame(Arg.Any<ZeroMqClusterFrame>())).Do(callInfo =>
+        connection.When(c => c.SendFrame(Arg.Any<ClusterFrame>())).Do(callInfo =>
         {
-            var frame = callInfo.Arg<ZeroMqClusterFrame>();
-            var request = frame.PayloadJson.FromNJson<ZeroMqClusterRequestEnvelope>()!;
-            var response = new ZeroMqClusterResponseEnvelope(request.CorrelationId, true, null, entries.ToNJson());
+            var frame = callInfo.Arg<ClusterFrame>();
+            var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+            var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, entries.ToNJson());
             busHolder!.TryCompletePendingRequest(response);
         });
 
@@ -58,12 +58,12 @@ public class ZeroMqClusterMessageBusSnapshotsTests
 
         ZeroMqClusterMessageBus? busHolder = null;
         var connection = ZeroMqClusterMessageBusTestHelpers.CreatePeerConnectionSubstitute();
-        connection.When(c => c.SendFrame(Arg.Any<ZeroMqClusterFrame>())).Do(callInfo =>
+        connection.When(c => c.SendFrame(Arg.Any<ClusterFrame>())).Do(callInfo =>
         {
-            var frame = callInfo.Arg<ZeroMqClusterFrame>();
-            var request = frame.PayloadJson.FromNJson<ZeroMqClusterRequestEnvelope>()!;
-            var delta = new ZeroMqSnapshotDeltaPayload { UpdatedEntries = updated, DeletedHashKeys = [7, 8] };
-            var response = new ZeroMqClusterResponseEnvelope(request.CorrelationId, true, null, delta.ToNJson());
+            var frame = callInfo.Arg<ClusterFrame>();
+            var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+            var delta = new ClusterSnapshotDeltaPayload { UpdatedEntries = updated, DeletedHashKeys = [7, 8] };
+            var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, delta.ToNJson());
             busHolder!.TryCompletePendingRequest(response);
         });
 
@@ -85,11 +85,11 @@ public class ZeroMqClusterMessageBusSnapshotsTests
 
         ZeroMqClusterMessageBus? busHolder = null;
         var connection = ZeroMqClusterMessageBusTestHelpers.CreatePeerConnectionSubstitute();
-        connection.When(c => c.SendFrame(Arg.Any<ZeroMqClusterFrame>())).Do(callInfo =>
+        connection.When(c => c.SendFrame(Arg.Any<ClusterFrame>())).Do(callInfo =>
         {
-            var frame = callInfo.Arg<ZeroMqClusterFrame>();
-            var request = frame.PayloadJson.FromNJson<ZeroMqClusterRequestEnvelope>()!;
-            var response = new ZeroMqClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null);
+            var frame = callInfo.Arg<ClusterFrame>();
+            var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+            var response = new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null);
             busHolder!.TryCompletePendingRequest(response);
         });
 
@@ -129,7 +129,7 @@ public class ZeroMqClusterMessageBusSnapshotsTests
         resolver.GetChannel("Orders").Returns(channel);
 
         await using var bus = await ZeroMqClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new ZeroMqClusterRequestEnvelope(Guid.NewGuid(), ZeroMqClusterRequestKind.RestoreSnapshot, "Orders", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "Orders", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -153,12 +153,12 @@ public class ZeroMqClusterMessageBusSnapshotsTests
 
         await using var bus = await ZeroMqClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new ZeroMqClusterRequestEnvelope(Guid.NewGuid(), ZeroMqClusterRequestKind.SyncDelta, "Orders", null, since.UtcTicks);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "Orders", null, since.UtcTicks);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<ZeroMqSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Select(e => e.HashKey).Should().BeEquivalentTo([5]);
         delta.DeletedHashKeys.Should().BeEquivalentTo([7, 8]);
     }
@@ -170,7 +170,7 @@ public class ZeroMqClusterMessageBusSnapshotsTests
         resolver.GetChannel("Missing").Returns(_ => throw new InvalidOperationException("channel Missing could not be found!"));
 
         await using var bus = await ZeroMqClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new ZeroMqClusterRequestEnvelope(Guid.NewGuid(), ZeroMqClusterRequestKind.RestoreSnapshot, "Missing", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "Missing", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

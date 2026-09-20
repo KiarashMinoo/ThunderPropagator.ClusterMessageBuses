@@ -1,9 +1,11 @@
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 {
     /// <summary>
     /// Wraps a single physical TCP connection — whether it is an outbound connection this node
     /// opened to a peer or an inbound connection <see cref="ITcpClusterListener"/> accepted from a
-    /// peer — behind one symmetric send/receive surface, framing each <see cref="TcpClusterFrame"/>
+    /// peer — behind one symmetric send/receive surface, framing each <see cref="ClusterFrame"/>
     /// with a 4-byte length prefix (TCP is a raw byte stream with no built-in message boundaries,
     /// unlike WebSocket). <see cref="System.Net.Sockets.NetworkStream"/>/<see cref="System.Net.Sockets.TcpClient"/>
     /// have no virtual members suitable for direct substitution, so this interface exists purely so
@@ -12,8 +14,8 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
     /// </summary>
     internal interface ITcpClusterConnection : IAsyncDisposable
     {
-        Task SendFrameAsync(TcpClusterFrame frame, CancellationToken cancellationToken);
+        Task SendFrameAsync(ClusterFrame frame, CancellationToken cancellationToken);
 
-        IAsyncEnumerable<TcpClusterFrame> ReceiveFramesAsync(CancellationToken cancellationToken);
+        IAsyncEnumerable<ClusterFrame> ReceiveFramesAsync(CancellationToken cancellationToken);
     }
 }

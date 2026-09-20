@@ -18,12 +18,12 @@ public class TcpClusterMessageBusSubscriptionFetchTests
 
         TcpClusterMessageBus? busHolder = null;
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>())
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = (TcpClusterFrame)callInfo[0];
-                var request = frame.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!;
-                var response = new TcpClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+                var frame = (ClusterFrame)callInfo[0];
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -37,9 +37,9 @@ public class TcpClusterMessageBusSubscriptionFetchTests
         result.Should().ContainSingle(d => d.SubscriptionId == "sub-1");
 
         await connection.Received(1).SendFrameAsync(
-            Arg.Is<TcpClusterFrame>(f => f.Kind == TcpClusterFrameKind.Request &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.Kind == TcpClusterRequestKind.FetchSubscriptions &&
-                f.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!.ChannelKey == channelKey),
+            Arg.Is<ClusterFrame>(f => f.Kind == ClusterFrameKind.Request &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.Kind == ClusterRequestKind.FetchSubscriptions &&
+                f.PayloadJson.FromNJson<ClusterRequestEnvelope>()!.ChannelKey == channelKey),
             Arg.Any<CancellationToken>());
     }
 
@@ -50,12 +50,12 @@ public class TcpClusterMessageBusSubscriptionFetchTests
 
         TcpClusterMessageBus? busHolder = null;
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>())
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = (TcpClusterFrame)callInfo[0];
-                var request = frame.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!;
-                var response = new TcpClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
+                var frame = (ClusterFrame)callInfo[0];
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, false, "no such channel", null);
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -94,7 +94,7 @@ public class TcpClusterMessageBusSubscriptionFetchTests
 
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.FetchSubscriptions, null, channelKey, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();

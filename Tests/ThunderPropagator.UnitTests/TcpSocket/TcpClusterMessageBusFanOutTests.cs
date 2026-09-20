@@ -4,6 +4,7 @@ using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.MessageBus;
 using ThunderPropagator.BuildingBlocks.Application.Enums;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.TcpSocket;
 
 namespace ThunderPropagator.UnitTests.TcpSocket;
@@ -27,9 +28,9 @@ public class TcpClusterMessageBusFanOutTests
         await bus.PublishAsync(channelKey, message);
 
         await peerConnection.Received(1).SendFrameAsync(
-            Arg.Is<TcpClusterFrame>(f => f.Kind == TcpClusterFrameKind.FanOut &&
-                f.PayloadJson.FromNJson<TcpFanOutPayload>()!.ChannelKey == channelKey &&
-                f.PayloadJson.FromNJson<TcpFanOutPayload>()!.Message.OriginId == bus.SelfId),
+            Arg.Is<ClusterFrame>(f => f.Kind == ClusterFrameKind.FanOut &&
+                f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterFanOutMessage>>()!.ChannelKey == channelKey &&
+                f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterFanOutMessage>>()!.Message.OriginId == bus.SelfId),
             Arg.Any<CancellationToken>());
     }
 
@@ -62,7 +63,7 @@ public class TcpClusterMessageBusFanOutTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var selfMessage = new ClusterFanOutMessage(bus.SelfId, 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new TcpFanOutPayload(channelKey, selfMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, selfMessage);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -81,7 +82,7 @@ public class TcpClusterMessageBusFanOutTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignMessage = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new TcpFanOutPayload(channelKey, foreignMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, foreignMessage);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -95,7 +96,7 @@ public class TcpClusterMessageBusFanOutTests
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
         var foreignMessage = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new TcpFanOutPayload(Guid.NewGuid(), foreignMessage);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(Guid.NewGuid(), foreignMessage);
 
         var act = async () => await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -125,7 +126,7 @@ public class TcpClusterMessageBusFanOutTests
         await subscription.DisposeAsync();
 
         var message = new ClusterFanOutMessage(Guid.NewGuid(), 1, CastType.Broadcast, new Dictionary<string, object?>());
-        var payload = new TcpFanOutPayload(channelKey, message);
+        var payload = new ClusterChannelEnvelope<ClusterFanOutMessage>(channelKey, message);
 
         await bus.HandleFanOutDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 

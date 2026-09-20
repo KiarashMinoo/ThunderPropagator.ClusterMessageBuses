@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 {
@@ -9,7 +10,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
     /// Wraps a single physical <see cref="System.Net.WebSockets.WebSocket"/> — whether it is an
     /// outbound connection this node opened to a peer (a <see cref="ClientWebSocket"/>) or an
     /// inbound connection <see cref="IWebSocketClusterListener"/> accepted from a peer — behind one
-    /// symmetric send/receive surface. Both directions carry the same <see cref="WebSocketClusterFrame"/>
+    /// symmetric send/receive surface. Both directions carry the same <see cref="ClusterFrame"/>
     /// envelope, so one class serves both roles rather than two separate wrappers.
     /// </summary>
     internal sealed class WebSocketPeerConnection : IAsyncDisposable
@@ -30,7 +31,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
         /// does not support concurrent callers on the same connection, and fan-out publishes,
         /// requests, and outbound responses can all originate from different callers at once.
         /// </summary>
-        internal async Task SendFrameAsync(WebSocketClusterFrame frame, CancellationToken cancellationToken)
+        internal async Task SendFrameAsync(ClusterFrame frame, CancellationToken cancellationToken)
         {
             var bytes = Encoding.UTF8.GetBytes(frame.ToNJson());
 
@@ -48,11 +49,11 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 
         /// <summary>
         /// Reads whole messages off the connection (reassembling fragments) and yields each as a
-        /// deserialized <see cref="WebSocketClusterFrame"/>. A single malformed message is skipped
+        /// deserialized <see cref="ClusterFrame"/>. A single malformed message is skipped
         /// rather than tearing down the connection; the loop ends when the peer closes the socket,
         /// <paramref name="cancellationToken"/> is cancelled, or the socket faults.
         /// </summary>
-        internal async IAsyncEnumerable<WebSocketClusterFrame> ReceiveFramesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+        internal async IAsyncEnumerable<ClusterFrame> ReceiveFramesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
         {
             var buffer = new byte[_receiveBufferSize];
 
@@ -89,11 +90,11 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 
                 var payload = Encoding.UTF8.GetString(messageStream.ToArray());
 
-                WebSocketClusterFrame? frame = null;
+                ClusterFrame? frame = null;
                 var parsed = false;
                 try
                 {
-                    frame = payload.FromNJson<WebSocketClusterFrame>();
+                    frame = payload.FromNJson<ClusterFrame>();
                     parsed = true;
                 }
                 catch (Exception)

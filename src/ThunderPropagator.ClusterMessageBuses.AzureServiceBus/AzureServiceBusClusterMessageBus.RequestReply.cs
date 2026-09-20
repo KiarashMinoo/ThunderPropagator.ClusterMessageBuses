@@ -9,9 +9,9 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
     /// <summary>
     /// Shared broker-native request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> sends an <see cref="AzureServiceBusClusterRequestEnvelope"/>
+    /// Requester side: <see cref="SendRequestAsync"/> sends a <see cref="ClusterRequestEnvelope"/>
     /// to the target's request queue (addressed directly by name) and awaits a matching
-    /// <see cref="AzureServiceBusClusterResponseEnvelope"/> on this node's own reply queue (polled by
+    /// <see cref="ClusterResponseEnvelope"/> on this node's own reply queue (polled by
     /// <see cref="AzureServiceBusClusterMessageBus.EnsureInitializedAsync"/>'s background loop).
     /// Answering side: that same initialization also starts the request-queue poller, which delivers
     /// into <see cref="HandleRequestDeliveryAsync"/>, dispatching to <see cref="BuildResponseAsync"/>,
@@ -23,9 +23,9 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<AzureServiceBusClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            AzureServiceBusClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -33,11 +33,8 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var request = new AzureServiceBusClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<AzureServiceBusClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate AzureServiceBus cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -72,17 +69,17 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal async Task HandleRequestDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            AzureServiceBusClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = body.FromNJson<AzureServiceBusClusterRequestEnvelope>();
+                request = body.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -99,10 +96,10 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw message body.</summary>
         internal Task HandleReplyDeliveryAsync(string body, CancellationToken cancellationToken)
         {
-            AzureServiceBusClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = body.FromNJson<AzureServiceBusClusterResponseEnvelope>();
+                response = body.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -120,22 +117,19 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
         /// Completes the pending <see cref="SendRequestAsync"/> call matching
         /// <paramref name="response"/>'s correlation id, if one is still waiting.
         /// </summary>
-        internal bool TryCompletePendingRequest(AzureServiceBusClusterResponseEnvelope response)
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response)
         {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
+            return _pendingRequests.TryComplete(response.CorrelationId, () => response);
         }
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>AzureServiceBusClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and
         /// sends the result to the requester's own reply queue — derived from
-        /// <see cref="AzureServiceBusClusterRequestEnvelope.ReplyToNodeEndpoint"/> rather than
+        /// <see cref="ClusterRequestEnvelope.ReplyToNodeEndpoint"/> rather than
         /// trusting a queue name supplied on the wire.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(AzureServiceBusClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyQueueName = AzureServiceBusResourceNaming.ReplyQueue(_options.ResourcePrefix, request.ReplyToNodeEndpoint);
@@ -150,22 +144,23 @@ namespace ThunderPropagator.ClusterMessageBuses.AzureServiceBus
             }
         }
 
-        internal async Task<AzureServiceBusClusterResponseEnvelope> BuildResponseAsync(AzureServiceBusClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    AzureServiceBusClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    AzureServiceBusClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    AzureServiceBusClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new AzureServiceBusClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

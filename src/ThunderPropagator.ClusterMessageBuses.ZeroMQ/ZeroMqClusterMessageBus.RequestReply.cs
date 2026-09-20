@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 {
@@ -7,15 +8,15 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
     {
         /// <summary>
         /// Shared plumbing for the three leader/peer-pull operations: sends a
-        /// <see cref="ZeroMqClusterRequestKind"/> request to <paramref name="targetPeerEndpoint"/> over
+        /// <see cref="ClusterRequestKind"/> request to <paramref name="targetPeerEndpoint"/> over
         /// its cached DEALER connection, and awaits the matching reply by correlation id — ROUTER/
         /// DEALER has no native request/reply, so this hand-rolled correlation-id scheme is required
         /// (the same reasoning as the broker transports and WebSocketClusterMessageBus elsewhere in
         /// this repo).
         /// </summary>
-        private async Task<ZeroMqClusterResponseEnvelope> SendRequestAsync(
+        private async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetPeerEndpoint,
-            ZeroMqClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
@@ -23,12 +24,10 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var correlationId = Guid.NewGuid();
-            var request = new ZeroMqClusterRequestEnvelope(correlationId, kind, channelName, channelKey, sinceTicks);
-            var frame = new ZeroMqClusterFrame(ZeroMqClusterFrameKind.Request, request.ToNJson());
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks);
+            var frame = new ClusterFrame(ClusterFrameKind.Request, request.ToNJson());
 
-            var tcs = new TaskCompletionSource<ZeroMqClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _pendingRequests[correlationId] = tcs;
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -58,17 +57,17 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
             }
             finally
             {
-                _pendingRequests.TryRemove(correlationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
         /// <summary>Answering side: parses the request, builds a response via the request-kind-specific builder, and replies over the same connection the request arrived on.</summary>
         private async Task HandleRequestFrameAsync(byte[] identity, string payloadJson, CancellationToken cancellationToken)
         {
-            ZeroMqClusterRequestEnvelope? request;
+            ClusterRequestEnvelope? request;
             try
             {
-                request = payloadJson.FromNJson<ZeroMqClusterRequestEnvelope>();
+                request = payloadJson.FromNJson<ClusterRequestEnvelope>();
             }
             catch (Exception exception)
             {
@@ -80,24 +79,25 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
                 return;
 
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
-            var responseFrame = new ZeroMqClusterFrame(ZeroMqClusterFrameKind.Response, response.ToNJson());
+            var responseFrame = new ClusterFrame(ClusterFrameKind.Response, response.ToNJson());
 
             _host!.SendReply(identity, responseFrame);
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly against a substitute <c>IClusterChannelResolver</c>.</summary>
-        internal Task<ZeroMqClusterResponseEnvelope> BuildResponseAsync(ZeroMqClusterRequestEnvelope request, CancellationToken cancellationToken) =>
+        internal Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken) =>
             request.Kind switch
             {
-                ZeroMqClusterRequestKind.RestoreSnapshot => BuildRestoreSnapshotResponseAsync(request, cancellationToken),
-                ZeroMqClusterRequestKind.SyncDelta => BuildSyncDeltaResponseAsync(request, cancellationToken),
-                ZeroMqClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponseAsync(request, cancellationToken),
-                _ => Task.FromResult(new ZeroMqClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)),
+                ClusterRequestKind.RestoreSnapshot => BuildRestoreSnapshotResponseAsync(request, cancellationToken),
+                ClusterRequestKind.SyncDelta => BuildSyncDeltaResponseAsync(request, cancellationToken),
+                ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponseAsync(request, cancellationToken),
+                ClusterRequestKind.PullSnapshotBytes => BuildPullSnapshotBytesResponseAsync(request, cancellationToken),
+                _ => Task.FromResult(new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)),
             };
 
         /// <summary>Internal (rather than private) so tests can drive it directly.</summary>
-        internal bool TryCompletePendingRequest(ZeroMqClusterResponseEnvelope response) =>
-            _pendingRequests.TryGetValue(response.CorrelationId, out var tcs) && tcs.TrySetResult(response);
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
         private static partial class Log
         {

@@ -48,7 +48,7 @@ public class UdpClusterMessageBusSnapshotsTests
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.RestoreSnapshot, "orders", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "orders", null, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
@@ -64,7 +64,7 @@ public class UdpClusterMessageBusSnapshotsTests
 
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.RestoreSnapshot, "missing", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing", null, null);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeFalse();
@@ -83,11 +83,11 @@ public class UdpClusterMessageBusSnapshotsTests
         await using var bus = await UdpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new UdpClusterRequestEnvelope(Guid.NewGuid(), UdpClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "orders", null, since.UtcTicks);
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<UdpSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Should().ContainSingle(e => e.HashKey == 2);
     }
 
@@ -101,9 +101,9 @@ public class UdpClusterMessageBusSnapshotsTests
         socket.SendDatagramAsync(Arg.Any<byte[]>(), Arg.Any<IPEndPoint>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<UdpClusterFrame>()!;
-                var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>()!;
-                var response = new UdpClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
+                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<ClusterFrame>()!;
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, Array.Empty<SnapshotEntry>().ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -116,18 +116,18 @@ public class UdpClusterMessageBusSnapshotsTests
         await act.Should().NotThrowAsync();
 
         await socket.Received(1).SendDatagramAsync(
-            Arg.Is<byte[]>(bytes => RequestFrameIs(bytes, UdpClusterRequestKind.RestoreSnapshot, "orders")),
+            Arg.Is<byte[]>(bytes => RequestFrameIs(bytes, ClusterRequestKind.RestoreSnapshot, "orders")),
             Arg.Any<IPEndPoint>(),
             Arg.Any<CancellationToken>());
     }
 
-    private static bool RequestFrameIs(byte[] bytes, UdpClusterRequestKind expectedKind, string expectedChannelName)
+    private static bool RequestFrameIs(byte[] bytes, ClusterRequestKind expectedKind, string expectedChannelName)
     {
-        var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-        if (frame is not { Kind: UdpClusterFrameKind.Request })
+        var frame = Encoding.UTF8.GetString(bytes).FromNJson<ClusterFrame>();
+        if (frame is not { Kind: ClusterFrameKind.Request })
             return false;
 
-        var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>();
+        var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>();
         return request is not null && request.Kind == expectedKind && request.ChannelName == expectedChannelName;
     }
 
@@ -142,10 +142,10 @@ public class UdpClusterMessageBusSnapshotsTests
         socket.SendDatagramAsync(Arg.Any<byte[]>(), Arg.Any<IPEndPoint>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<UdpClusterFrame>()!;
-                var request = frame.PayloadJson.FromNJson<UdpClusterRequestEnvelope>()!;
-                var deltaPayload = new UdpSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
-                var response = new UdpClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
+                var frame = Encoding.UTF8.GetString((byte[])callInfo[0]).FromNJson<ClusterFrame>()!;
+                var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
+                var deltaPayload = new ClusterSnapshotDeltaPayload { UpdatedEntries = [], DeletedHashKeys = [] };
+                var response = new ClusterResponseEnvelope(request.CorrelationId, true, null, deltaPayload.ToNJson());
                 _ = busHolder!.HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 return Task.CompletedTask;
             });
@@ -166,8 +166,8 @@ public class UdpClusterMessageBusSnapshotsTests
     // a statement body, the null-conditional operator, or an 'is' pattern-matching operator.
     private static bool IsSyncDeltaRequest(byte[] bytes, DateTimeOffset since)
     {
-        var frame = Encoding.UTF8.GetString(bytes).FromNJson<UdpClusterFrame>();
-        var request = frame?.PayloadJson.FromNJson<UdpClusterRequestEnvelope>();
-        return request is not null && request.Kind == UdpClusterRequestKind.SyncDelta && request.SinceTicks == since.UtcTicks;
+        var frame = Encoding.UTF8.GetString(bytes).FromNJson<ClusterFrame>();
+        var request = frame?.PayloadJson.FromNJson<ClusterRequestEnvelope>();
+        return request is not null && request.Kind == ClusterRequestKind.SyncDelta && request.SinceTicks == since.UtcTicks;
     }
 }

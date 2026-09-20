@@ -1,3 +1,5 @@
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
+
 namespace ThunderPropagator.ClusterMessageBuses.NATS
 {
     /// <summary>
@@ -15,18 +17,18 @@ namespace ThunderPropagator.ClusterMessageBuses.NATS
     /// </remarks>
     /// <param name="Kind">Which operation is being requested.</param>
     /// <param name="ChannelName">
-    /// Identifies the channel by name (not key) for <see cref="NatsClusterRequestKind.RestoreSnapshot"/>
-    /// and <see cref="NatsClusterRequestKind.SyncDelta"/>. Unused for
-    /// <see cref="NatsClusterRequestKind.FetchSubscriptions"/>, which identifies the channel by
+    /// Identifies the channel by name (not key) for <see cref="ClusterRequestKind.RestoreSnapshot"/>
+    /// and <see cref="ClusterRequestKind.SyncDelta"/>. Unused for
+    /// <see cref="ClusterRequestKind.FetchSubscriptions"/>, which identifies the channel by
     /// <see cref="ChannelKey"/> instead.
     /// </param>
-    /// <param name="ChannelKey">Identifies the channel by key for <see cref="NatsClusterRequestKind.FetchSubscriptions"/>.</param>
+    /// <param name="ChannelKey">Identifies the channel by key for <see cref="ClusterRequestKind.FetchSubscriptions"/>.</param>
     /// <param name="SinceTicks">
-    /// <see cref="DateTimeOffset.UtcTicks"/> cutoff for <see cref="NatsClusterRequestKind.SyncDelta"/>;
+    /// <see cref="DateTimeOffset.UtcTicks"/> cutoff for <see cref="ClusterRequestKind.SyncDelta"/>;
     /// unused otherwise.
     /// </param>
     internal sealed record NatsClusterRequestEnvelope(
-        NatsClusterRequestKind Kind,
+        ClusterRequestKind Kind,
         string? ChannelName,
         Guid? ChannelKey,
         long? SinceTicks);

@@ -24,7 +24,7 @@ public class RedisPubSubClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(channel);
 
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new RedisPubSubClusterRequestEnvelope(Guid.NewGuid(), RedisPubSubClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -41,7 +41,7 @@ public class RedisPubSubClusterMessageBusSubscriptionFetchTests
         resolver.GetChannel(channelKey).Returns(_ => throw new InvalidChannelKeyException(channelKey, new KeyNotFoundException()));
 
         await using var bus = await RedisPubSubClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new RedisPubSubClusterRequestEnvelope(Guid.NewGuid(), RedisPubSubClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, channelKey, null, new Uri("https://requester:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -71,10 +71,10 @@ public class RedisPubSubClusterMessageBusSubscriptionFetchTests
         var call = subscriber.ReceivedCalls()
             .Last(c => c.GetMethodInfo().Name == nameof(ISubscriber.PublishAsync));
         var value = (RedisValue)call.GetArguments()[1]!;
-        var sentRequest = value.ToString().FromNJson<RedisPubSubClusterRequestEnvelope>()!;
+        var sentRequest = value.ToString().FromNJson<ClusterRequestEnvelope>()!;
 
         var descriptors = new[] { new ClusterSubscriptionDescriptor("sub-9", "req-9", "conn-9") };
-        bus.TryCompletePendingRequest(new RedisPubSubClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest.CorrelationId, true, null, descriptors.ToNJson()));
 
         var result = await fetchTask;
 

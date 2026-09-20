@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NetMQ;
@@ -22,7 +21,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
     /// <remarks>
     /// <para>
     /// Fan-out, subscription-sync, and the three leader/peer-pull operations all ride over the same
-    /// physical DEALER→ROUTER connection per peer pair, discriminated by <see cref="ZeroMqClusterFrame.Kind"/>
+    /// physical DEALER→ROUTER connection per peer pair, discriminated by <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterFrame.Kind"/>
     /// — the same hand-rolled correlation-id/reply scheme <c>WebSocketClusterMessageBus</c> and the
     /// broker transports use, since ROUTER/DEALER has no native request/reply of its own (unlike
     /// gRPC's unary calls or HTTP's request/response). A request's reply is sent back over the exact
@@ -58,9 +57,15 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 
         private readonly ClusterConnectionCache<IZeroMqPeerConnection> _outboundConnections;
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<ZeroMqClusterResponseEnvelope>> _pendingRequests = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
+
+        /// <summary>
+        /// Answers this node's own <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterRequestKind.PullSnapshotBytes"/> requests -- see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly CancellationTokenSource _lifetimeCts = new();
 
@@ -75,7 +80,8 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
             IClusterNodeDiscovery discovery,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<IZeroMqClusterHost>>? hostFactory = null,
-            Func<Uri, CancellationToken, Task<IZeroMqPeerConnection>>? peerConnectionFactory = null)
+            Func<Uri, CancellationToken, Task<IZeroMqPeerConnection>>? peerConnectionFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -89,6 +95,7 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
             _peerConnectionFactory = peerConnectionFactory ?? DefaultPeerConnectionFactoryAsync;
             _outboundConnections = new ClusterConnectionCache<IZeroMqPeerConnection>(
                 (key, cancellationToken) => _peerConnectionFactory(new Uri(key), cancellationToken));
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -164,10 +171,10 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 
         private async Task DispatchRouterFrameAsync(byte[] identity, string frameJson, CancellationToken cancellationToken)
         {
-            ZeroMqClusterFrame? frame;
+            ClusterFrame? frame;
             try
             {
-                frame = frameJson.FromNJson<ZeroMqClusterFrame>();
+                frame = frameJson.FromNJson<ClusterFrame>();
             }
             catch (Exception exception)
             {
@@ -180,14 +187,17 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
 
             switch (frame.Kind)
             {
-                case ZeroMqClusterFrameKind.FanOut:
+                case ClusterFrameKind.FanOut:
                     await HandleFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case ZeroMqClusterFrameKind.SubscriptionEvent:
+                case ClusterFrameKind.SubscriptionEvent:
                     await HandleSubscriptionEventDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case ZeroMqClusterFrameKind.Request:
+                case ClusterFrameKind.Request:
                     await HandleRequestFrameAsync(identity, frame.PayloadJson, cancellationToken).ConfigureAwait(false);
+                    break;
+                case ClusterFrameKind.ByteFanOut:
+                    await HandleByteFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
                     Log.UnexpectedFrameKindOnRouter(_logger, frame.Kind.ToString());
@@ -198,14 +208,14 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
         /// <summary>
         /// A peer connection's DEALER socket's frame-received callback — a DEALER only ever receives
         /// the answer to a request this node itself sent (ZMQ strips the routing/identity frame for
-        /// the DEALER side automatically), so this is always a <see cref="ZeroMqClusterFrameKind.Response"/>.
+        /// the DEALER side automatically), so this is always a <see cref="ThunderPropagator.ClusterMessageBuses.SharedKernel.ClusterFrameKind.Response"/>.
         /// </summary>
         private void OnPeerFrameReceived(string frameJson)
         {
-            ZeroMqClusterFrame? frame;
+            ClusterFrame? frame;
             try
             {
-                frame = frameJson.FromNJson<ZeroMqClusterFrame>();
+                frame = frameJson.FromNJson<ClusterFrame>();
             }
             catch (Exception exception)
             {
@@ -213,16 +223,16 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
                 return;
             }
 
-            if (frame is null || frame.Kind != ZeroMqClusterFrameKind.Response)
+            if (frame is null || frame.Kind != ClusterFrameKind.Response)
             {
                 Log.UnexpectedFrameKindOnPeerConnection(_logger, frame?.Kind.ToString() ?? "null");
                 return;
             }
 
-            ZeroMqClusterResponseEnvelope? response;
+            ClusterResponseEnvelope? response;
             try
             {
-                response = frame.PayloadJson.FromNJson<ZeroMqClusterResponseEnvelope>();
+                response = frame.PayloadJson.FromNJson<ClusterResponseEnvelope>();
             }
             catch (Exception exception)
             {
@@ -238,13 +248,11 @@ namespace ThunderPropagator.ClusterMessageBuses.ZeroMQ
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             await _outboundConnections.DisposeAsync().ConfigureAwait(false);
 

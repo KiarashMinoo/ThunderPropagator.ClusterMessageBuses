@@ -28,6 +28,10 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         internal static string SubscriptionEventTopicId(string prefix, Guid channelKey)
             => $"{prefix}-subscriptions-{channelKey:N}";
 
+        /// <summary>Byte-oriented fan-out topic for a specific channel key -- see <c>ClusterByteMessage</c>'s own doc comment. Kept on its own topic namespace rather than sharing <see cref="FanOutTopicId"/>, since the two payload shapes are never interchangeable on the wire.</summary>
+        internal static string ByteFanOutTopicId(string prefix, Guid channelKey)
+            => $"{prefix}-bytefanout-{channelKey:N}";
+
         /// <summary>
         /// This node's own exclusive Pub/Sub subscription on <see cref="FanOutTopicId"/> — deterministic
         /// (not GUID-suffixed) so it survives a restart and is trivially re-attachable, mirroring how
@@ -40,6 +44,10 @@ namespace ThunderPropagator.ClusterMessageBuses.GcpPubSub
         /// <summary>This node's own exclusive Pub/Sub subscription on <see cref="SubscriptionEventTopicId"/>.</summary>
         internal static string SubscriptionEventSubscriptionId(string prefix, Uri nodeEndpoint, Guid channelKey)
             => $"{prefix}-subscriptions-{Slugify(nodeEndpoint)}-{channelKey:N}";
+
+        /// <summary>This node's own exclusive Pub/Sub subscription on <see cref="ByteFanOutTopicId"/>.</summary>
+        internal static string ByteFanOutSubscriptionId(string prefix, Uri nodeEndpoint, Guid channelKey)
+            => $"{prefix}-bytefanout-{Slugify(nodeEndpoint)}-{channelKey:N}";
 
         /// <summary>
         /// The topic a node listens on for inbound broker-native requests (restore/delta/fetch-

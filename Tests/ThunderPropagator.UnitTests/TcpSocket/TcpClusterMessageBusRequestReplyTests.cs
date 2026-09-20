@@ -1,6 +1,7 @@
 using FluentAssertions;
 using NSubstitute;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.TcpSocket;
 
 namespace ThunderPropagator.UnitTests.TcpSocket;
@@ -9,7 +10,7 @@ public class TcpClusterMessageBusRequestReplyTests
 {
     /// <summary>
     /// Builds a connection substitute whose <c>SendFrameAsync</c>, whenever it observes a
-    /// <see cref="TcpClusterFrameKind.Request"/> frame, synchronously turns around and delivers
+    /// <see cref="ClusterFrameKind.Request"/> frame, synchronously turns around and delivers
     /// <paramref name="buildResponse"/>'s response back into <paramref name="bus"/> via
     /// <see cref="TcpClusterMessageBus.HandleResponseDeliveryAsync"/> — simulating the answering
     /// peer writing its response back over the same physical connection the request arrived on,
@@ -18,17 +19,17 @@ public class TcpClusterMessageBusRequestReplyTests
     /// be built.
     /// </summary>
     private static ITcpClusterConnection CreateAutoRepliyingConnection(
-        Func<TcpClusterRequestEnvelope, TcpClusterResponseEnvelope> buildResponse,
+        Func<ClusterRequestEnvelope, ClusterResponseEnvelope> buildResponse,
         Func<TcpClusterMessageBus> bus)
     {
         var connection = TcpClusterMessageBusTestHelpers.CreateConnectionSubstitute();
-        connection.SendFrameAsync(Arg.Any<TcpClusterFrame>(), Arg.Any<CancellationToken>())
+        connection.SendFrameAsync(Arg.Any<ClusterFrame>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
-                var frame = (TcpClusterFrame)callInfo[0];
-                if (frame.Kind == TcpClusterFrameKind.Request)
+                var frame = (ClusterFrame)callInfo[0];
+                if (frame.Kind == ClusterFrameKind.Request)
                 {
-                    var request = frame.PayloadJson.FromNJson<TcpClusterRequestEnvelope>()!;
+                    var request = frame.PayloadJson.FromNJson<ClusterRequestEnvelope>()!;
                     var response = buildResponse(request);
                     _ = bus().HandleResponseDeliveryAsync(response.ToNJson(), CancellationToken.None);
                 }
@@ -42,14 +43,14 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         TcpClusterMessageBus? bus = null;
         var connection = CreateAutoRepliyingConnection(
-            request => new TcpClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
+            request => new ClusterResponseEnvelope(request.CorrelationId, true, null, "\"payload\""),
             () => bus!);
 
         bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(
             outboundConnectionFactory: (_, _) => Task.FromResult(connection));
 
         var response = await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), TcpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         response.Success.Should().BeTrue();
         response.PayloadJson.Should().Be("\"payload\"");
@@ -62,14 +63,14 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         TcpClusterMessageBus? bus = null;
         var connection = CreateAutoRepliyingConnection(
-            request => new TcpClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
+            request => new ClusterResponseEnvelope(request.CorrelationId, false, "channel not found", null),
             () => bus!);
 
         bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(
             outboundConnectionFactory: (_, _) => Task.FromResult(connection));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), TcpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*channel not found*");
 
@@ -88,7 +89,7 @@ public class TcpClusterMessageBusRequestReplyTests
             outboundConnectionFactory: (_, _) => Task.FromResult(connection));
 
         var act = async () => await bus.SendRequestAsync(
-            new Uri("https://peer1:5001/"), TcpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
+            new Uri("https://peer1:5001/"), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null, CancellationToken.None);
 
         await act.Should().ThrowAsync<TimeoutException>();
     }
@@ -98,8 +99,8 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var responsesSent = new List<TcpClusterFrame>();
-        Task CaptureResponse(TcpClusterFrame frame, CancellationToken ct) { responsesSent.Add(frame); return Task.CompletedTask; }
+        var responsesSent = new List<ClusterFrame>();
+        Task CaptureResponse(ClusterFrame frame, CancellationToken ct) { responsesSent.Add(frame); return Task.CompletedTask; }
 
         var act = async () => await bus.HandleRequestFrameAsync("{ not valid json ", CaptureResponse, CancellationToken.None);
 
@@ -112,18 +113,18 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var responsesSent = new List<TcpClusterFrame>();
-        Task CaptureResponse(TcpClusterFrame frame, CancellationToken ct) { responsesSent.Add(frame); return Task.CompletedTask; }
+        var responsesSent = new List<ClusterFrame>();
+        Task CaptureResponse(ClusterFrame frame, CancellationToken ct) { responsesSent.Add(frame); return Task.CompletedTask; }
 
         var correlationId = Guid.NewGuid();
-        var request = new TcpClusterRequestEnvelope(correlationId, (TcpClusterRequestKind)999, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(correlationId, (ClusterRequestKind)999, null, Guid.NewGuid(), null);
 
         await bus.HandleRequestFrameAsync(request.ToNJson(), CaptureResponse, CancellationToken.None);
 
         responsesSent.Should().HaveCount(1);
-        responsesSent[0].Kind.Should().Be(TcpClusterFrameKind.Response);
+        responsesSent[0].Kind.Should().Be(ClusterFrameKind.Response);
 
-        var response = responsesSent[0].PayloadJson.FromNJson<TcpClusterResponseEnvelope>()!;
+        var response = responsesSent[0].PayloadJson.FromNJson<ClusterResponseEnvelope>()!;
         response.CorrelationId.Should().Be(correlationId);
         response.Success.Should().BeFalse();
     }
@@ -133,9 +134,9 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        Task ThrowingSend(TcpClusterFrame frame, CancellationToken ct) => throw new IOException("simulated write failure");
+        Task ThrowingSend(ClusterFrame frame, CancellationToken ct) => throw new IOException("simulated write failure");
 
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
 
         var act = async () => await bus.HandleRequestFrameAsync(request.ToNJson(), ThrowingSend, CancellationToken.None);
 
@@ -147,7 +148,7 @@ public class TcpClusterMessageBusRequestReplyTests
     {
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync();
 
-        var response = new TcpClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
+        var response = new ClusterResponseEnvelope(Guid.NewGuid(), true, null, null);
 
         bus.TryCompletePendingRequest(response).Should().BeFalse();
     }
@@ -155,12 +156,12 @@ public class TcpClusterMessageBusRequestReplyTests
     [Fact]
     public async Task BuildResponseAsync_HandlerThrows_ReturnsUnsuccessfulResponseInsteadOfPropagating()
     {
-        var channelResolver = NSubstitute.Substitute.For<ThunderPropagator.ClusterMessageBuses.SharedKernel.IClusterChannelResolver>();
+        var channelResolver = NSubstitute.Substitute.For<IClusterChannelResolver>();
         channelResolver.GetChannel(Arg.Any<Guid>()).Returns(_ => throw new InvalidOperationException("no such channel"));
 
         await using var bus = await TcpClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: channelResolver);
 
-        var request = new TcpClusterRequestEnvelope(Guid.NewGuid(), TcpClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.FetchSubscriptions, null, Guid.NewGuid(), null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

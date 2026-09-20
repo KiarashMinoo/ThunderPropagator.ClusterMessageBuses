@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 {
@@ -12,7 +12,7 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
             var stamped = subscriptionEvent with { OriginId = _selfId };
-            var frame = new WebSocketClusterFrame(WebSocketClusterFrameKind.SubscriptionEvent, new WebSocketSubscriptionEventPayload(channelKey, stamped).ToNJson());
+            var frame = new ClusterFrame(ClusterFrameKind.SubscriptionEvent, new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, stamped).ToNJson());
 
             var peers = await _discovery.GetPeersAsync(cancellationToken).ConfigureAwait(false);
 
@@ -32,17 +32,16 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
 
         public override Task<IAsyncDisposable> SubscribeAsync(Guid channelKey, Func<ClusterSubscriptionEvent, CancellationToken, Task> onEvent, CancellationToken cancellationToken = default)
         {
-            _subscriptionEventHandlers[channelKey] = onEvent;
-            return Task.FromResult<IAsyncDisposable>(new SubscriptionEventSubscription(_subscriptionEventHandlers, channelKey));
+            return Task.FromResult(_subscriptionEventHandlers.Register(channelKey, onEvent));
         }
 
         /// <summary>Internal (rather than private) so tests can drive it directly with a raw payload.</summary>
         internal async Task HandleSubscriptionEventDeliveryAsync(string payload, CancellationToken cancellationToken)
         {
-            WebSocketSubscriptionEventPayload? subscriptionEventPayload;
+            ClusterChannelEnvelope<ClusterSubscriptionEvent>? subscriptionEventPayload;
             try
             {
-                subscriptionEventPayload = payload.FromNJson<WebSocketSubscriptionEventPayload>();
+                subscriptionEventPayload = payload.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>();
             }
             catch (Exception exception)
             {
@@ -50,37 +49,19 @@ namespace ThunderPropagator.ClusterMessageBuses.WebSocket
                 return;
             }
 
-            if (subscriptionEventPayload is null || subscriptionEventPayload.Event.OriginId == _selfId)
+            if (subscriptionEventPayload is null || subscriptionEventPayload.Message.OriginId == _selfId)
                 return;
 
-            if (!_subscriptionEventHandlers.TryGetValue(subscriptionEventPayload.ChannelKey, out var handler))
+            if (!_subscriptionEventHandlers.TryGetHandler(subscriptionEventPayload.ChannelKey, out var handler) || handler is null)
                 return;
 
             try
             {
-                await handler(subscriptionEventPayload.Event, cancellationToken).ConfigureAwait(false);
+                await handler(subscriptionEventPayload.Message, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
                 Log.SubscriptionEventHandlerFaulted(_logger, exception);
-            }
-        }
-
-        private sealed class SubscriptionEventSubscription : IAsyncDisposable
-        {
-            private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _handlers;
-            private readonly Guid _channelKey;
-
-            internal SubscriptionEventSubscription(ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> handlers, Guid channelKey)
-            {
-                _handlers = handlers;
-                _channelKey = channelKey;
-            }
-
-            public ValueTask DisposeAsync()
-            {
-                _handlers.TryRemove(_channelKey, out _);
-                return ValueTask.CompletedTask;
             }
         }
 

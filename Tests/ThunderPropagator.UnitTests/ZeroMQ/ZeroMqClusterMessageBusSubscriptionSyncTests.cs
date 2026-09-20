@@ -3,6 +3,7 @@ using NSubstitute;
 using ThunderPropagator.Application.Channels.Cluster.Discovery;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 using ThunderPropagator.ClusterMessageBuses.ZeroMQ;
 
 namespace ThunderPropagator.UnitTests.ZeroMQ;
@@ -26,10 +27,10 @@ public class ZeroMqClusterMessageBusSubscriptionSyncTests
         var channelKey = Guid.NewGuid();
         await bus.PublishAsync(channelKey, CreateEvent(Guid.Empty));
 
-        connection.Received(1).SendFrame(Arg.Is<ZeroMqClusterFrame>(f =>
-            f.Kind == ZeroMqClusterFrameKind.SubscriptionEvent &&
-            f.PayloadJson.FromNJson<ZeroMqSubscriptionEventPayload>()!.ChannelKey == channelKey &&
-            f.PayloadJson.FromNJson<ZeroMqSubscriptionEventPayload>()!.Event.OriginId == bus.SelfId));
+        connection.Received(1).SendFrame(Arg.Is<ClusterFrame>(f =>
+            f.Kind == ClusterFrameKind.SubscriptionEvent &&
+            f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>()!.ChannelKey == channelKey &&
+            f.PayloadJson.FromNJson<ClusterChannelEnvelope<ClusterSubscriptionEvent>>()!.Message.OriginId == bus.SelfId));
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public class ZeroMqClusterMessageBusSubscriptionSyncTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var selfEvent = CreateEvent(bus.SelfId);
-        var payload = new ZeroMqSubscriptionEventPayload(channelKey, selfEvent);
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, selfEvent);
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -78,7 +79,7 @@ public class ZeroMqClusterMessageBusSubscriptionSyncTests
         await bus.SubscribeAsync(channelKey, handler);
 
         var foreignEvent = CreateEvent(Guid.NewGuid());
-        var payload = new ZeroMqSubscriptionEventPayload(channelKey, foreignEvent);
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, foreignEvent);
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 
@@ -108,7 +109,7 @@ public class ZeroMqClusterMessageBusSubscriptionSyncTests
         var subscription = await bus.SubscribeAsync(channelKey, handler);
         await subscription.DisposeAsync();
 
-        var payload = new ZeroMqSubscriptionEventPayload(channelKey, CreateEvent(Guid.NewGuid()));
+        var payload = new ClusterChannelEnvelope<ClusterSubscriptionEvent>(channelKey, CreateEvent(Guid.NewGuid()));
 
         await bus.HandleSubscriptionEventDeliveryAsync(payload.ToNJson(), CancellationToken.None);
 

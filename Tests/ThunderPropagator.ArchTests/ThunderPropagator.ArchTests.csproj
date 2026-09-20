@@ -41,5 +41,8 @@
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.GcpPubSub\ThunderPropagator.ClusterMessageBuses.GcpPubSub.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Grpc\ThunderPropagator.ClusterMessageBuses.Grpc.csproj" />
         <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.ZeroMQ\ThunderPropagator.ClusterMessageBuses.ZeroMQ.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Swim\ThunderPropagator.ClusterMessageBuses.Swim.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Rdma\ThunderPropagator.ClusterMessageBuses.Rdma.csproj" />
+        <ProjectReference Include="..\..\src\ThunderPropagator.ClusterMessageBuses.Srd\ThunderPropagator.ClusterMessageBuses.Srd.csproj" />
     </ItemGroup>
 </Project>

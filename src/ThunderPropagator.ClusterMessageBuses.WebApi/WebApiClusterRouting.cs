@@ -27,6 +27,12 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
         internal static string SubscriptionsSelfPath(string listenPath, Guid channelKey)
             => $"{SubscriptionEventPath(listenPath, channelKey)}/self";
 
+        internal static string ByteFanOutPath(string listenPath, Guid channelKey)
+            => $"{NormalizePrefix(listenPath)}bytefanout/{channelKey:N}";
+
+        internal static string ByteSnapshotPath(string listenPath, Guid channelKey)
+            => $"{NormalizePrefix(listenPath)}bytesnapshot/{channelKey:N}";
+
         /// <summary>Prefix used for this node's own <see cref="System.Net.HttpListener"/> binding — same as every route's shared prefix, without a trailing route segment.</summary>
         internal static string ListenPrefix(Uri nodeEndpoint, string listenPath)
             => $"{nodeEndpoint.Scheme}://{nodeEndpoint.Authority}{NormalizePrefix(listenPath)}";
@@ -49,6 +55,12 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
 
         internal static string PeerSubscriptionsSelfUrl(Uri peerEndpoint, string listenPath, Guid channelKey)
             => $"{PeerSubscriptionEventUrl(peerEndpoint, listenPath, channelKey)}/self";
+
+        internal static string PeerByteFanOutUrl(Uri peerEndpoint, string listenPath, Guid channelKey)
+            => $"{PeerBaseUrl(peerEndpoint, listenPath)}bytefanout/{channelKey:N}";
+
+        internal static string PeerByteSnapshotUrl(Uri peerEndpoint, string listenPath, Guid channelKey)
+            => $"{PeerBaseUrl(peerEndpoint, listenPath)}bytesnapshot/{channelKey:N}";
 
         private static string NormalizePrefix(string listenPath)
         {
@@ -80,10 +92,16 @@ namespace ThunderPropagator.ClusterMessageBuses.WebApi
 
                 if (segments[0] == "subscriptions" && Guid.TryParseExact(segments[1], "N", out var subscriptionKey))
                     return new WebApiRouteMatch(WebApiRouteKind.SubscriptionEvent, ChannelKey: subscriptionKey);
+
+                if (segments[0] == "bytefanout" && Guid.TryParseExact(segments[1], "N", out var byteFanOutKey))
+                    return new WebApiRouteMatch(WebApiRouteKind.ByteFanOut, ChannelKey: byteFanOutKey);
             }
 
             if (string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
             {
+                if (segments.Length == 2 && segments[0] == "bytesnapshot" && Guid.TryParseExact(segments[1], "N", out var byteSnapshotKey))
+                    return new WebApiRouteMatch(WebApiRouteKind.ByteSnapshot, ChannelKey: byteSnapshotKey);
+
                 if (segments.Length == 2 && segments[0] == "snapshot")
                     return new WebApiRouteMatch(WebApiRouteKind.Snapshot, ChannelName: Uri.UnescapeDataString(segments[1]));
 

@@ -39,7 +39,7 @@ public class KafkaClusterMessageBusSnapshotsTests
         resolver.GetChannel("Orders").Returns(channel);
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
-        var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), KafkaClusterRequestKind.RestoreSnapshot, "Orders", null, null, new Uri("https://follower:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "Orders", null, null, new Uri("https://follower:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -64,12 +64,12 @@ public class KafkaClusterMessageBusSnapshotsTests
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), KafkaClusterRequestKind.SyncDelta, "Orders", null, since.UtcTicks, new Uri("https://follower:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "Orders", null, since.UtcTicks, new Uri("https://follower:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var delta = response.PayloadJson!.FromNJson<KafkaSnapshotDeltaPayload>();
+        var delta = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         delta!.UpdatedEntries.Select(e => e.HashKey).Should().BeEquivalentTo([5]);
         delta.DeletedHashKeys.Should().BeEquivalentTo([7, 8]);
     }
@@ -81,7 +81,7 @@ public class KafkaClusterMessageBusSnapshotsTests
         resolver.GetChannel("Missing").Returns(_ => throw new InvalidOperationException("channel Missing could not be found!"));
 
         await using var bus = KafkaClusterMessageBusTestHelpers.CreateBus(channelResolver: resolver);
-        var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), KafkaClusterRequestKind.RestoreSnapshot, "Missing", null, null, new Uri("https://follower:5001/"));
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "Missing", null, null, new Uri("https://follower:5001/"));
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -93,11 +93,11 @@ public class KafkaClusterMessageBusSnapshotsTests
     [Fact]
     public async Task RestoreFromLeaderAsync_AppliesOnlyActiveEntriesToTheLocalChannel()
     {
-        KafkaClusterRequestEnvelope? sentRequest = null;
+        ClusterRequestEnvelope? sentRequest = null;
         var producer = Substitute.For<IProducer<string, string>>();
         producer.ProduceAsync(
                 Arg.Any<string>(),
-                Arg.Do<Message<string, string>>(m => sentRequest = m.Value.FromNJson<KafkaClusterRequestEnvelope>()),
+                Arg.Do<Message<string, string>>(m => sentRequest = m.Value.FromNJson<ClusterRequestEnvelope>()),
                 Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<DeliveryResult<string, string>>(null!));
 
@@ -108,7 +108,7 @@ public class KafkaClusterMessageBusSnapshotsTests
 
         sentRequest.Should().NotBeNull();
         var entries = new[] { MakeEntry(1) };
-        bus.TryCompletePendingRequest(new KafkaClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, entries.ToNJson()));
+        bus.TryCompletePendingRequest(new ClusterResponseEnvelope(sentRequest!.CorrelationId, true, null, entries.ToNJson()));
 
         await restoreTask;
 

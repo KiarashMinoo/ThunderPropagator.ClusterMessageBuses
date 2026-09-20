@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using ThunderPropagator.Application.Channels.Cluster.Subscriptions;
 using ThunderPropagator.BuildingBlocks.Application.Helpers;
+using ThunderPropagator.ClusterMessageBuses.SharedKernel;
 
 namespace ThunderPropagator.ClusterMessageBuses.Pulsar
 {
@@ -11,7 +12,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Pulsar
             try
             {
                 var response = await SendRequestAsync(
-                    peerEndpoint, PulsarClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
+                    peerEndpoint, ClusterRequestKind.FetchSubscriptions, null, channelKey, null, cancellationToken)
                     .ConfigureAwait(false);
 
                 return response.PayloadJson?.FromNJson<ClusterSubscriptionDescriptor[]>() ?? [];
@@ -24,12 +25,12 @@ namespace ThunderPropagator.ClusterMessageBuses.Pulsar
         }
 
         /// <summary>Answering side of <see cref="FetchPeerSubscriptionsAsync"/>: mirrors <c>ClusterSubscriptionEndpoints</c>'s <c>/self</c> handler.</summary>
-        private PulsarClusterResponseEnvelope BuildFetchSubscriptionsResponse(PulsarClusterRequestEnvelope request)
+        private ClusterResponseEnvelope BuildFetchSubscriptionsResponse(ClusterRequestEnvelope request)
         {
             var channel = _channelResolver.GetChannel(request.ChannelKey!.Value);
             var descriptors = GetLocalClusterSubscriptionDescriptors(channel);
 
-            return new PulsarClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
+            return new ClusterResponseEnvelope(request.CorrelationId, true, null, descriptors.ToNJson());
         }
 
         private static partial class Log

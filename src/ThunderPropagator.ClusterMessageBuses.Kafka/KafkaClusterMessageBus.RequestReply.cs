@@ -9,8 +9,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
     /// <summary>
     /// Shared broker-native request/reply plumbing for the three leader/peer-pull operations
     /// (<c>RestoreFromLeaderAsync</c>, <c>SyncDeltaFromLeaderAsync</c>, <c>FetchPeerSubscriptionsAsync</c>).
-    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="KafkaClusterRequestEnvelope"/>
-    /// to the target's request topic and awaits a matching <see cref="KafkaClusterResponseEnvelope"/> on
+    /// Requester side: <see cref="SendRequestAsync"/> publishes a <see cref="ClusterRequestEnvelope"/>
+    /// to the target's request topic and awaits a matching <see cref="ClusterResponseEnvelope"/> on
     /// this node's own reply topic. Answering side: <see cref="RunRequestListenerLoopAsync"/> consumes
     /// this node's own request topic and dispatches to <see cref="BuildResponseAsync"/>, implemented per
     /// request kind in <c>KafkaClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>.
@@ -20,19 +20,16 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         private readonly ResiliencePipeline _resiliencePipeline = ClusterResiliencePipelineFactory.Create();
 
         /// <summary>Internal (rather than private) so tests can exercise the requester side directly.</summary>
-        internal async Task<KafkaClusterResponseEnvelope> SendRequestAsync(
+        internal async Task<ClusterResponseEnvelope> SendRequestAsync(
             Uri targetNodeEndpoint,
-            KafkaClusterRequestKind kind,
+            ClusterRequestKind kind,
             string? channelName,
             Guid? channelKey,
             long? sinceTicks,
             CancellationToken cancellationToken)
         {
-            var request = new KafkaClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
-            var tcs = new TaskCompletionSource<KafkaClusterResponseEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            if (!_pendingRequests.TryAdd(request.CorrelationId, tcs))
-                throw new InvalidOperationException($"Duplicate Kafka cluster request correlation id '{request.CorrelationId}'.");
+            var request = new ClusterRequestEnvelope(Guid.NewGuid(), kind, channelName, channelKey, sinceTicks, _nodeEndpoint);
+            var tcs = _pendingRequests.Register(request.CorrelationId);
 
             try
             {
@@ -66,7 +63,7 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
             }
             finally
             {
-                _pendingRequests.TryRemove(request.CorrelationId, out _);
+                _pendingRequests.Remove(request.CorrelationId);
             }
         }
 
@@ -91,10 +88,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
                         continue;
                     }
 
-                    KafkaClusterRequestEnvelope? request;
+                    ClusterRequestEnvelope? request;
                     try
                     {
-                        request = result?.Message?.Value?.FromNJson<KafkaClusterRequestEnvelope>();
+                        request = result?.Message?.Value?.FromNJson<ClusterRequestEnvelope>();
                     }
                     catch (Exception exception)
                     {
@@ -135,10 +132,10 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
                         continue;
                     }
 
-                    KafkaClusterResponseEnvelope? response;
+                    ClusterResponseEnvelope? response;
                     try
                     {
-                        response = result?.Message?.Value?.FromNJson<KafkaClusterResponseEnvelope>();
+                        response = result?.Message?.Value?.FromNJson<ClusterResponseEnvelope>();
                     }
                     catch (Exception exception)
                     {
@@ -165,20 +162,15 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
         /// which use it to complete a round trip deterministically without racing a background
         /// consumer loop.
         /// </summary>
-        internal bool TryCompletePendingRequest(KafkaClusterResponseEnvelope response)
-        {
-            if (!_pendingRequests.TryRemove(response.CorrelationId, out var pending))
-                return false;
-
-            return pending.TrySetResult(response);
-        }
+        internal bool TryCompletePendingRequest(ClusterResponseEnvelope response) =>
+            _pendingRequests.TryComplete(response.CorrelationId, () => response);
 
         /// <summary>
         /// Answers an inbound request by dispatching to the per-kind builder (implemented in
         /// <c>KafkaClusterMessageBus.Snapshots.cs</c> / <c>.SubscriptionFetch.cs</c>) and publishes
         /// the result back to the requester's reply topic.
         /// </summary>
-        internal async Task HandleIncomingRequestAsync(KafkaClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task HandleIncomingRequestAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             var response = await BuildResponseAsync(request, cancellationToken).ConfigureAwait(false);
             var replyTopic = KafkaTopicNaming.ReplyTopic(_options.TopicPrefix, request.ReplyToNodeEndpoint);
@@ -193,22 +185,23 @@ namespace ThunderPropagator.ClusterMessageBuses.Kafka
             }
         }
 
-        internal async Task<KafkaClusterResponseEnvelope> BuildResponseAsync(KafkaClusterRequestEnvelope request, CancellationToken cancellationToken)
+        internal async Task<ClusterResponseEnvelope> BuildResponseAsync(ClusterRequestEnvelope request, CancellationToken cancellationToken)
         {
             try
             {
                 return request.Kind switch
                 {
-                    KafkaClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    KafkaClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
-                    KafkaClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
-                    _ => new KafkaClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
+                    ClusterRequestKind.RestoreSnapshot => await BuildRestoreSnapshotResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.SyncDelta => await BuildSyncDeltaResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    ClusterRequestKind.FetchSubscriptions => BuildFetchSubscriptionsResponse(request),
+                    ClusterRequestKind.PullSnapshotBytes => await BuildPullSnapshotBytesResponseAsync(request, cancellationToken).ConfigureAwait(false),
+                    _ => new ClusterResponseEnvelope(request.CorrelationId, false, $"Unknown request kind '{request.Kind}'.", null)
                 };
             }
             catch (Exception exception)
             {
                 Log.RequestHandlingFaulted(_logger, exception, request.Kind.ToString());
-                return new KafkaClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
+                return new ClusterResponseEnvelope(request.CorrelationId, false, exception.Message, null);
             }
         }
 

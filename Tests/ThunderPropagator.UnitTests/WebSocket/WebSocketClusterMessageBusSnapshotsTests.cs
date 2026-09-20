@@ -21,7 +21,7 @@ public class WebSocketClusterMessageBusSnapshotsTests
         resolver.GetChannel("my-channel").Returns(channel);
 
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.RestoreSnapshot, "my-channel", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "my-channel", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
@@ -42,12 +42,12 @@ public class WebSocketClusterMessageBusSnapshotsTests
 
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.SyncDelta, "my-channel", null, since.UtcTicks);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 
         response.Success.Should().BeTrue();
-        var payload = response.PayloadJson!.FromNJson<WebSocketSnapshotDeltaPayload>();
+        var payload = response.PayloadJson!.FromNJson<ClusterSnapshotDeltaPayload>();
         payload.Should().NotBeNull();
     }
 
@@ -58,7 +58,7 @@ public class WebSocketClusterMessageBusSnapshotsTests
         resolver.GetChannel("missing-channel").Returns(_ => throw new KeyNotFoundException("no such channel"));
 
         await using var bus = await WebSocketClusterMessageBusTestHelpers.CreateBusAsync(channelResolver: resolver);
-        var request = new WebSocketClusterRequestEnvelope(Guid.NewGuid(), WebSocketClusterRequestKind.RestoreSnapshot, "missing-channel", null, null);
+        var request = new ClusterRequestEnvelope(Guid.NewGuid(), ClusterRequestKind.RestoreSnapshot, "missing-channel", null, null);
 
         var response = await bus.BuildResponseAsync(request, CancellationToken.None);
 

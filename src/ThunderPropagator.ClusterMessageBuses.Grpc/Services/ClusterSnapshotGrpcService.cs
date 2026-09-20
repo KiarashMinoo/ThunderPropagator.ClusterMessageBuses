@@ -18,5 +18,8 @@ namespace ThunderPropagator.ClusterMessageBuses.Grpc.Services
 
         public override Task<SyncDeltaResponse> SyncDelta(SyncDeltaRequest request, ServerCallContext context)
             => _bus.BuildSyncDeltaResponseAsync(request, context.CancellationToken);
+
+        public override Task<PullSnapshotBytesResponse> PullSnapshotBytes(PullSnapshotBytesRequest request, ServerCallContext context)
+            => _bus.BuildPullSnapshotBytesResponseAsync(request, context.CancellationToken);
     }
 }

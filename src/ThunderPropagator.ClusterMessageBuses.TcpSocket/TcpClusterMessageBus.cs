@@ -30,7 +30,7 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
     /// A TCP connection has no native request/reply either, but — like WebSocket, and unlike every
     /// broker transport in this repo — there is no separate reply channel: since the connection is
     /// inherently bidirectional, the answering side simply writes its
-    /// <see cref="TcpClusterResponseEnvelope"/> back over the exact same connection the request
+    /// <see cref="ClusterResponseEnvelope"/> back over the exact same connection the request
     /// arrived on.
     /// </para>
     /// </remarks>
@@ -55,9 +55,18 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
 
         private readonly ClusterConnectionCache<ITcpClusterConnection> _outboundConnections;
 
-        private readonly ConcurrentDictionary<Guid, Func<ClusterFanOutMessage, CancellationToken, Task>> _fanOutHandlers = new();
-        private readonly ConcurrentDictionary<Guid, Func<ClusterSubscriptionEvent, CancellationToken, Task>> _subscriptionEventHandlers = new();
-        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<TcpClusterResponseEnvelope>> _pendingRequests = new();
+        private readonly ClusterHandlerRegistry<ClusterFanOutMessage> _fanOutHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterSubscriptionEvent> _subscriptionEventHandlers = new();
+        private readonly ClusterHandlerRegistry<ClusterByteMessage> _byteFanOutHandlers = new();
+        private readonly PendingRequestTracker<ClusterResponseEnvelope> _pendingRequests = new();
+
+        /// <summary>
+        /// Answers this node's own <see cref="ClusterRequestKind.PullSnapshotBytes"/> requests --
+        /// see <see cref="IClusterByteSnapshotProvider"/>'s own doc comment. Left unregistered by a
+        /// channel-based consumer (nothing here requires it); a non-channel consumer registers its
+        /// own implementation.
+        /// </summary>
+        private readonly IClusterByteSnapshotProvider? _byteSnapshotProvider;
 
         private readonly ConcurrentBag<Task> _backgroundTasks = new();
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -69,7 +78,8 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             IClusterNodeDiscovery discovery,
             ILoggerFactory loggerFactory,
             Func<CancellationToken, Task<ITcpClusterListener>>? listenerFactory = null,
-            Func<Uri, CancellationToken, Task<ITcpClusterConnection>>? outboundConnectionFactory = null)
+            Func<Uri, CancellationToken, Task<ITcpClusterConnection>>? outboundConnectionFactory = null,
+            IClusterByteSnapshotProvider? byteSnapshotProvider = null)
         {
             _options = options.Value;
             _nodeEndpoint = clusterConfiguration.NodeEndpoint
@@ -82,6 +92,7 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             _listenerFactory = listenerFactory ?? DefaultListenerFactoryAsync;
             _outboundConnectionFactory = outboundConnectionFactory ?? DefaultOutboundConnectionFactoryAsync;
             _outboundConnections = new ClusterConnectionCache<ITcpClusterConnection>(ConnectToPeerAsync);
+            _byteSnapshotProvider = byteSnapshotProvider;
 
             Log.Constructed(_logger, _nodeEndpoint.Host);
         }
@@ -175,24 +186,27 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
             }
         }
 
-        internal async Task DispatchFrameAsync(ITcpClusterConnection connection, TcpClusterFrame frame, CancellationToken cancellationToken)
+        internal async Task DispatchFrameAsync(ITcpClusterConnection connection, ClusterFrame frame, CancellationToken cancellationToken)
         {
             switch (frame.Kind)
             {
-                case TcpClusterFrameKind.FanOut:
+                case ClusterFrameKind.FanOut:
                     await HandleFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case TcpClusterFrameKind.SubscriptionEvent:
+                case ClusterFrameKind.SubscriptionEvent:
                     await HandleSubscriptionEventDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
-                case TcpClusterFrameKind.Request:
+                case ClusterFrameKind.Request:
                     await HandleRequestFrameAsync(
                         frame.PayloadJson,
                         (responseFrame, ct) => connection.SendFrameAsync(responseFrame, ct),
                         cancellationToken).ConfigureAwait(false);
                     break;
-                case TcpClusterFrameKind.Response:
+                case ClusterFrameKind.Response:
                     await HandleResponseDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
+                    break;
+                case ClusterFrameKind.ByteFanOut:
+                    await HandleByteFanOutDeliveryAsync(frame.PayloadJson, cancellationToken).ConfigureAwait(false);
                     break;
                 default:
                     Log.UnknownFrameKind(_logger, frame.Kind.ToString());
@@ -220,13 +234,11 @@ namespace ThunderPropagator.ClusterMessageBuses.TcpSocket
         {
             await _lifetimeCts.CancelAsync().ConfigureAwait(false);
 
-            foreach (var pending in _pendingRequests.Values)
-            {
-                pending.TrySetCanceled();
-            }
+            _pendingRequests.CancelAll();
 
             _fanOutHandlers.Clear();
             _subscriptionEventHandlers.Clear();
+            _byteFanOutHandlers.Clear();
 
             await _outboundConnections.DisposeAsync().ConfigureAwait(false);
 
