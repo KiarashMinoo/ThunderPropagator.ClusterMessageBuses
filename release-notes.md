@@ -1,9 +1,13 @@
-## [1.0.1-beta.19] — 2026-09-22
+## [1.0.1-beta.20] — 2026-09-22
+
+### 🚀 Features
+
+- Bump Google.Protobuf to 3.36.2 `(b6e8b30)` — dependabot[bot]
 
 ### 📦 Dependencies
 
 | Package | Old | New |
 |---------|-----|-----|
-| AWSSDK.SQS | 4.0.100.13 | 4.0.100.14 |
+| FluentAssertions | 8.10.0 | 8.11.0 |
 
-- Bump AWSSDK.SQS from 4.0.100.13 to 4.0.100.14 `(4b8eb28)` — dependabot[bot]
+- Bump FluentAssertions from 8.10.0 to 8.11.0 `(331ddca)` — dependabot[bot]
