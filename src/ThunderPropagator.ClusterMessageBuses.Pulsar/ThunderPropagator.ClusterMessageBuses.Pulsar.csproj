@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="DotPulsar" />
+    <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
