@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Cloud.PubSub.V1" />
+    <PackageReference Include="Google.Protobuf" VersionOverride="3.36.2" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
