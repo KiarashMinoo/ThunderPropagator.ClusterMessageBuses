@@ -65,7 +65,7 @@
   </ItemGroup>
   <ItemGroup Label="AzureServiceBus">
     <!-- Same version already pinned by ThunderPropagator.Feeviders' AzureServiceBus projects. -->
-    <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.2" />
+    <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
   </ItemGroup>
   <ItemGroup Label="GcpPubSub">
     <!-- PublisherServiceApiClient/SubscriberServiceApiClient are GAPIC-generated with a protected
