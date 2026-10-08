@@ -2,6 +2,8 @@
 
 Pluggable cluster message buses for coordinating ThunderPropagator nodes and distributing internal cluster events.
 
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/kiarashminoo/thunderpropagator.clustermessagebuses?utm_source=readme&utm_medium=badge)
+
 ## Contents
 
 - [Documentation areas](#documentation-areas)
