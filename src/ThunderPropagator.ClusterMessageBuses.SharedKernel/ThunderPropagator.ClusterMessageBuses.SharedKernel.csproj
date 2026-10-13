@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Apache.NMS.ActiveMQ" />
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="$(ThunderPropagatorClusterPackageId)" />
   </ItemGroup>
