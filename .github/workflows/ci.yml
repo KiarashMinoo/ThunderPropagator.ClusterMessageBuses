@@ -28,7 +28,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/develop' }}
+  cancel-in-progress: false   # queue runs in sequence (publishes go through the NuGet queue relay); never cancel a run mid-release
 
 jobs:
   # NuGet.org Trusted Publishing (OIDC) can't run inside reusable-ci.yml itself: a
