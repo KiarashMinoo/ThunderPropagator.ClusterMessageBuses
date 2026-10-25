@@ -1,5 +1,5 @@
-## [1.0.1-beta.21] — 2026-10-08
+## [1.0.1-beta.22] — 2026-10-25
 
-### 📝 Documentation
+### ⚙️ CI / Tooling
 
-- Update README.md `(67a34a2)` — Kiarash Minoo
+- ThunderPropagator.ClusterMessageBuses: Float family version and add third-party updater mode `(949e3e6)` — Kiarash Minoo

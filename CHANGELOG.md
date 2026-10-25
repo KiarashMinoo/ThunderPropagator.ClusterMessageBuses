@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1-beta.22] — 2026-10-25
+
+### ⚙️ CI / Tooling
+
+- ThunderPropagator.ClusterMessageBuses: Float family version and add third-party updater mode `(949e3e6)` — Kiarash Minoo
+
 ## [1.0.1-beta.21] — 2026-10-08
 
 ### 📝 Documentation
