@@ -66,3 +66,7 @@ Pluggable cluster message buses for coordinating ThunderPropagator nodes and dis
 | [`WebSocket`](./WebSocket/README.md) | ✅ Complete | 22 | 2 | 1 |
 
 **Last generated:** July 27, 2026
+
+## Author
+
+Built by [Ahmad Kiarash Minoo](https://kiarashminoo.com/). Read the [ThunderPropagator overview](https://kiarashminoo.com/projects/thunderpropagator/).
